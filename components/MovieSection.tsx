@@ -1,8 +1,14 @@
+import { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { Movie } from '@/types/movie';
 import { MovieCard } from './MovieCard';
 import { Colors } from '@/constants/colors';
 import { ChevronRight } from 'lucide-react-native';
+
+const CARD_WIDTH = 120;
+const CARD_MARGIN = 10;
+const ITEM_SIZE = CARD_WIDTH + CARD_MARGIN;
+const LIST_PADDING = 16;
 
 interface MovieSectionProps {
   title: string;
@@ -10,8 +16,24 @@ interface MovieSectionProps {
   onSeeAll?: () => void;
 }
 
-export function MovieSection({ title, movies, onSeeAll }: MovieSectionProps) {
+export const MovieSection = memo(function MovieSection({ title, movies, onSeeAll }: MovieSectionProps) {
   if (movies.length === 0) return null;
+
+  const renderItem = useCallback(
+    ({ item }: { item: Movie }) => <MovieCard movie={item} width={CARD_WIDTH} />,
+    [],
+  );
+
+  const keyExtractor = useCallback((item: Movie) => item.id, []);
+
+  const getItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: ITEM_SIZE,
+      offset: LIST_PADDING + index * ITEM_SIZE,
+      index,
+    }),
+    [],
+  );
 
   return (
     <View style={styles.container}>
@@ -19,46 +41,47 @@ export function MovieSection({ title, movies, onSeeAll }: MovieSectionProps) {
         <Text style={styles.title}>{title}</Text>
         {onSeeAll && (
           <TouchableOpacity style={styles.seeAllButton} onPress={onSeeAll} activeOpacity={0.7}>
-            <ChevronRight size={24} color={Colors.textSecondary} />
+            <ChevronRight size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
       <FlatList
         horizontal
         data={movies}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MovieCard movie={item} width={138} />}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        getItemLayout={getItemLayout}
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         initialNumToRender={4}
-        maxToRenderPerBatch={6}
-        windowSize={5}
-        removeClippedSubviews
+        maxToRenderPerBatch={4}
+        windowSize={3}
+        removeClippedSubviews        nestedScrollEnabled        scrollEventThrottle={16}
       />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 28,
+    marginBottom: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    marginBottom: 14,
+    paddingHorizontal: 16,
+    marginBottom: 10,
   },
   title: {
     color: Colors.text,
-    fontSize: 40 / 2,
+    fontSize: 16,
     fontWeight: '800',
   },
   seeAllButton: {
     padding: 3,
   },
   scrollContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
   },
 });

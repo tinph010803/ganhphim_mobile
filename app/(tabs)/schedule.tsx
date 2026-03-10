@@ -5,10 +5,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { Movie, Favorite } from '@/types/movie';
@@ -55,14 +55,14 @@ export default function ScheduleScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <ChevronLeft size={24} color={Colors.text} />
+          <ChevronLeft size={20} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Yêu thích</Text>
         <View style={styles.placeholder} />
@@ -158,7 +158,7 @@ export default function ScheduleScreen() {
                       onPress={() => removeFavorite(favorite.id)}
                       activeOpacity={0.7}
                     >
-                      <Trash2 size={16} color={Colors.error} />
+                      <Trash2 size={14} color={Colors.error} />
                       <Text style={styles.removeButtonText}>Bỏ thích</Text>
                     </TouchableOpacity>
                   </View>
@@ -188,14 +188,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   backButton: {
     padding: 4,
   },
   headerTitle: {
     color: Colors.text,
-    fontSize: 38 / 2,
+    fontSize: 17,
     fontWeight: '800',
   },
   placeholder: {
@@ -204,19 +204,19 @@ const styles = StyleSheet.create({
   tabContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
     gap: 2,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 14,
+    borderRadius: 12,
     marginHorizontal: 16,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 11,
+    borderRadius: 9,
     backgroundColor: 'transparent',
   },
   tabActive: {
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: Colors.text,
-    fontSize: 35 / 2.2,
+    fontSize: 13,
     fontWeight: '600',
   },
   tabTextActive: {
@@ -244,21 +244,21 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: Colors.textSecondary,
-    fontSize: 16,
+    fontSize: 14,
     textAlign: 'center',
-    marginTop: 48,
+    marginTop: 40,
   },
   favoriteItem: {
-    marginBottom: 22,
+    marginBottom: 16,
   },
   favoriteContent: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
   },
   thumbnail: {
-    width: 108,
-    height: 152,
-    borderRadius: 12,
+    width: 90,
+    height: 126,
+    borderRadius: 10,
     backgroundColor: Colors.cardBackground,
   },
   posterBadgeRow: {
@@ -292,43 +292,43 @@ const styles = StyleSheet.create({
   },
   favoriteTitle: {
     color: Colors.text,
-    fontSize: 34 / 2,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   favoriteTitleEn: {
     color: Colors.textSecondary,
-    fontSize: 32 / 2.5,
-    marginBottom: 7,
+    fontSize: 11,
+    marginBottom: 6,
   },
   favoriteMetadata: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   metadataText: {
     color: Colors.textSecondary,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
   },
   metadataDot: {
     color: Colors.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
   },
   removeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     backgroundColor: 'rgba(245, 107, 112, 0.18)',
     borderRadius: 8,
     alignSelf: 'flex-start',
   },
   removeButtonText: {
     color: Colors.error,
-    fontSize: 30 / 2,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

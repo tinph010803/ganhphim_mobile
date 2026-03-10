@@ -1,77 +1,173 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  SafeAreaView,
+  FlatList,
   Image,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
-import { getHomeMovies } from '@/lib/ophim';
+import { getHomeMovies, getMoviesByCountry, getMoviesByType } from '@/lib/ophim';
 import { Movie } from '@/types/movie';
 import { FeaturedCarousel } from '@/components/FeaturedCarousel';
 import { MovieSection } from '@/components/MovieSection';
-import { Bell, ChevronDown, Settings } from 'lucide-react-native';
+import { Bell, ChevronDown, ChevronRight, Settings } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 
 const FILTER_OPTIONS = ['Đề xuất', 'Phim bộ', 'Phim lẻ', 'Thể loại'];
 
+const INTEREST_CATEGORIES = [
+  { id: '1', title: 'Marvel Studios', color: '#CC1A1A', secondColor: '#8B0000' },
+  { id: '2', title: 'Thuyết Minh Tuổi Thơ', color: '#1A56DB', secondColor: '#0D3B9E' },
+  { id: '3', title: 'Hoạt Hình', color: '#7E3AF2', secondColor: '#5521B5' },
+  { id: '4', title: 'Phim Hành Động', color: '#E3780B', secondColor: '#A85200' },
+  { id: '5', title: 'Tâm Lý Tình Cảm', color: '#0D7C6A', secondColor: '#075449' },
+];
+
+type SectionConfig = {
+  key: string;
+  title: string;
+  fetchFn: () => Promise<Movie[]>;
+  navSlug: string;
+  navType: 'country' | 'list';
+};
+
+const SECTION_CONFIGS: SectionConfig[] = [
+  { key: 'korean', title: 'Phim Hàn Quốc mới', fetchFn: () => getMoviesByCountry('han-quoc'), navSlug: 'han-quoc', navType: 'country' },
+  { key: 'chinese', title: 'Phim Trung Quốc mới', fetchFn: () => getMoviesByCountry('trung-quoc'), navSlug: 'trung-quoc', navType: 'country' },
+  { key: 'western', title: 'Phim US-UK mới', fetchFn: () => getMoviesByCountry('au-my'), navSlug: 'au-my', navType: 'country' },
+  { key: 'theater', title: 'Phim Điện Ảnh Mới Coóng', fetchFn: () => getMoviesByType('phim-le'), navSlug: 'phim-le', navType: 'list' },
+];
+
 export default function HomeScreen() {
+  const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState('Đề xuất');
   const [featuredMovies, setFeaturedMovies] = useState<Movie[]>([]);
-  const [recentMovies, setRecentMovies] = useState<Movie[]>([]);
-  const [chineseMovies, setChineseMovies] = useState<Movie[]>([]);
-  const [westernMovies, setWesternMovies] = useState<Movie[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [top10Movies, setTop10Movies] = useState<Movie[]>([]);
+  const [sectionMovies, setSectionMovies] = useState<Record<string, Movie[]>>({});
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateAnim = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
-    loadMovies();
+    (async () => {
+      try {
+        const [home, ...sections] = await Promise.all([
+          getHomeMovies(),
+          ...SECTION_CONFIGS.map((s) => s.fetchFn()),
+        ]);
+        setFeaturedMovies(home.slice(0, 8));
+        setTop10Movies(home.slice(0, 10));
+        const movies: Record<string, Movie[]> = {};
+        SECTION_CONFIGS.forEach((s, i) => { movies[s.key] = sections[i].slice(0, 12); });
+        setSectionMovies(movies);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+      }
+    })();
   }, []);
 
-  useEffect(() => {
-    if (!loading) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateAnim, {
-          toValue: 0,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [loading, fadeAnim, translateAnim]);
+  const renderSection = useCallback(
+    ({ item }: { item: SectionConfig }) => {
+      const movies = sectionMovies[item.key];
+      if (!movies?.length) return null;
+      return (
+        <MovieSection
+          title={item.title}
+          movies={movies}
+          onSeeAll={() =>
+            router.push({
+              pathname: '/category/[slug]',
+              params: { slug: item.navSlug, title: item.title, type: item.navType },
+            })
+          }
+        />
+      );
+    },
+    [sectionMovies, router],
+  );
 
-  const loadMovies = async () => {
-    try {
-      const movies = await getHomeMovies();
-      const featured = movies.slice(0, 8);
-      const recent = movies.slice(0, 24);
+  const sectionKeyExtractor = useCallback((item: SectionConfig) => item.key, []);
 
-      setFeaturedMovies(featured);
-      setRecentMovies(recent);
+  const renderTop10Card = useCallback(({ item, index }: { item: Movie; index: number }) => (
+    <TouchableOpacity
+      style={styles.top10Card}
+      activeOpacity={0.75}
+      onPress={() => {
+        const id = item.slug || item.id;
+        if (id) router.push({ pathname: '/movie/[id]', params: { id } });
+      }}
+    >
+      <View style={styles.top10ImageWrap}>
+        <Image source={{ uri: item.poster_url }} style={styles.top10Poster} resizeMode="cover" />
+        <View style={styles.top10RankWrap}>
+          <Text style={styles.top10Rank}>{index + 1}</Text>
+        </View>
+        <View style={styles.episodeBadgeSmall}>
+          <Text style={styles.episodeBadgeSmallText}>PĐ.{item.current_episode}</Text>
+        </View>
+      </View>
+      <Text style={styles.top10Title} numberOfLines={2}>{item.title}</Text>
+      <Text style={styles.top10TitleEn} numberOfLines={1}>{item.title_en}</Text>
+    </TouchableOpacity>
+  ), [router]);
 
-      if (recent.length) {
-        setChineseMovies(recent.filter((_, index) => index % 2 === 0).slice(0, 8));
-        setWesternMovies(recent.filter((_, index) => index % 2 !== 0).slice(0, 8));
-      }
-    } catch (error) {
-      console.error('Error loading movies:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const listHeader = useMemo(() => (
+      <Animated.View style={{ opacity: fadeAnim }}>
+        {featuredMovies.length > 0 && <FeaturedCarousel movies={featuredMovies} />}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Bạn đang quan tâm gì?</Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <ChevronRight size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScrollContent} nestedScrollEnabled>
+            {INTEREST_CATEGORIES.map((cat) => (
+              <TouchableOpacity key={cat.id} activeOpacity={0.8} style={styles.categoryCard}>
+                <LinearGradient colors={[cat.color, cat.secondColor]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.categoryGradient}>
+                  <Text style={styles.categoryTitle}>{cat.title}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Animated.View>
+  ), [featuredMovies, fadeAnim]);
+
+  const listFooter = useMemo(() => {
+    if (!top10Movies.length) return null;
+    return (
+      <View style={[styles.sectionContainer, styles.footerPadding]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Top 10 phim bộ hôm nay</Text>
+        </View>
+        <FlatList
+          horizontal
+          data={top10Movies}
+          keyExtractor={(item) => item.id}
+          renderItem={renderTop10Card}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.top10ScrollContent}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={3}
+          removeClippedSubviews
+          nestedScrollEnabled
+          scrollEventThrottle={16}
+        />
+      </View>
+    );
+  }, [top10Movies, renderTop10Card]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <LinearGradient
         colors={['rgba(255, 62, 30, 0.36)', 'rgba(255, 62, 30, 0.06)', 'transparent']}
         start={{ x: 0.5, y: 0 }}
@@ -81,85 +177,56 @@ export default function HomeScreen() {
 
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
+          <Image source={{ uri: 'https://i.ibb.co/dJ7CJ8Pf/logo-ganh-removebg-preview.png' }} style={styles.logo} />
           <View>
-            <Text style={styles.logoTitle}>RoPhim</Text>
-            <Text style={styles.logoSubtitle}>Phim hay cả rồ</Text>
+            <Text style={styles.logoTitle}>Gánh Phim</Text>
+            <Text style={styles.logoSubtitle}>Phim hay cả gánh</Text>
           </View>
         </View>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-            <Bell size={24} color={Colors.text} />
+            <Bell size={20} color={Colors.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-            <Settings size={24} color={Colors.text} />
+            <Settings size={20} color={Colors.text} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScrollContent}>
+          {FILTER_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option}
+              style={[styles.filterButton, selectedFilter === option && styles.filterButtonActive]}
+              onPress={() => setSelectedFilter(option)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterButtonText, selectedFilter === option && styles.filterButtonTextActive]}>
+                {option}
+              </Text>
+              {option === 'Thể loại' && (
+                <ChevronDown size={14} color={selectedFilter === option ? Colors.background : Colors.text} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <FlatList
+        data={SECTION_CONFIGS}
+        keyExtractor={sectionKeyExtractor}
+        renderItem={renderSection}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
         showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.filterContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterScrollContent}
-          >
-            {FILTER_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.filterButton,
-                  selectedFilter === option && styles.filterButtonActive,
-                ]}
-                onPress={() => setSelectedFilter(option)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    selectedFilter === option && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {option}
-                </Text>
-                {option === 'Thể loại' && (
-                  <ChevronDown size={16} color={selectedFilter === option ? Colors.background : Colors.text} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <Animated.View
-          style={{
-            opacity: fadeAnim,
-            transform: [{ translateY: translateAnim }],
-          }}
-        >
-          {!loading && featuredMovies.length > 0 && (
-            <FeaturedCarousel movies={featuredMovies} />
-          )}
-
-          {!loading && recentMovies.length > 0 && (
-            <MovieSection
-              title="Xem tiếp của bạn"
-              movies={recentMovies.slice(0, 8)}
-              onSeeAll={() => {}}
-            />
-          )}
-
-          {!loading && chineseMovies.length > 0 && (
-            <MovieSection title="Phim Trung Quốc mới" movies={chineseMovies} onSeeAll={() => {}} />
-          )}
-
-          {!loading && westernMovies.length > 0 && (
-            <MovieSection title="Phim US-UK mới" movies={westernMovies} onSeeAll={() => {}} />
-          )}
-        </Animated.View>
-      </ScrollView>
+        scrollEventThrottle={16}
+        removeClippedSubviews
+        initialNumToRender={2}
+        maxToRenderPerBatch={1}
+        windowSize={5}
+        style={styles.scrollView}
+      />
     </SafeAreaView>
   );
 }
@@ -180,38 +247,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   logo: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 34,
+    height: 34,
+    resizeMode: 'contain',
   },
   logoTitle: {
     color: Colors.text,
-    fontSize: 44 / 2,
+    fontSize: 19,
     fontWeight: '800',
   },
   logoSubtitle: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: 12,
     marginTop: -2,
   },
   headerIcons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.24)',
     justifyContent: 'center',
@@ -222,15 +289,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterContainer: {
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   filterScrollContent: {
-    paddingHorizontal: 18,
-    gap: 10,
+    paddingHorizontal: 16,
+    gap: 8,
   },
   filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1.4,
     borderColor: 'rgba(255,255,255,0.7)',
@@ -245,10 +312,115 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     color: Colors.white,
-    fontSize: 17 / 1.2,
+    fontSize: 12,
     fontWeight: '600',
   },
   filterButtonTextActive: {
     color: Colors.background,
+  },
+  sectionContainer: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  // Interest categories
+  categoryScrollContent: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  categoryCard: {
+    width: 150,
+    height: 72,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  categoryGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  categoryTitle: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  // Top 10
+  top10ScrollContent: {
+    paddingHorizontal: 16,
+    gap: 0,
+  },
+  top10Card: {
+    width: 110,
+    marginRight: 10,
+  },
+  top10ImageWrap: {
+    width: '100%',
+    aspectRatio: 2 / 3,
+    borderRadius: 10,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: Colors.cardBackground,
+  },
+  top10Poster: {
+    width: '100%',
+    height: '100%',
+  },
+  top10RankWrap: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 4,
+    paddingLeft: 6,
+  },
+  top10Rank: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: Colors.white,
+    lineHeight: 56,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 4,
+  },
+  episodeBadgeSmall: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(77, 85, 118, 0.95)',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  episodeBadgeSmallText: {
+    color: Colors.text,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  top10Title: {
+    color: Colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  top10TitleEn: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  footerPadding: {
+    paddingBottom: 24,
   },
 });

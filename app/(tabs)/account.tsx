@@ -3,10 +3,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { ChevronLeft, ChevronRight, CreditCard as Edit, Lock, User } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -33,14 +33,14 @@ export default function AccountScreen() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <ChevronLeft size={24} color={Colors.text} />
+          <ChevronLeft size={20} color={Colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Quản lý tài khoản</Text>
         <View style={styles.placeholder} />
@@ -71,10 +71,10 @@ export default function AccountScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.menuItemLeft}>
-                    <Icon size={22} color={Colors.text} />
+                    <Icon size={18} color={Colors.text} />
                     <Text style={styles.menuItemText}>{item.label}</Text>
                   </View>
-                  <ChevronRight size={20} color={Colors.textSecondary} />
+                  <ChevronRight size={16} color={Colors.textSecondary} />
                 </TouchableOpacity>
               );
             })}
@@ -95,14 +95,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   backButton: {
     padding: 4,
   },
   headerTitle: {
     color: Colors.text,
-    fontSize: 38 / 2,
+    fontSize: 17,
     fontWeight: '800',
   },
   placeholder: {
@@ -113,16 +113,16 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 10,
   },
   profileSection: {
     alignItems: 'flex-start',
-    marginBottom: 26,
+    marginBottom: 20,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.cardBackground,
   },
   menuSection: {
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 18,
+    paddingVertical: 14,
     paddingHorizontal: 2,
   },
   menuItemGap: {
@@ -141,11 +141,11 @@ const styles = StyleSheet.create({
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   menuItemText: {
     color: Colors.text,
-    fontSize: 35 / 2,
+    fontSize: 15,
     fontWeight: '600',
   },
 });

@@ -10,6 +10,7 @@ export interface Movie {
   episodes: number;
   current_episode: number;
   duration: number;
+  duration_text: string;
   quality: string;
   age_rating: string;
   is_series: boolean;
@@ -18,6 +19,11 @@ export interface Movie {
   updated_at: string;
   stream_url?: string;
   episodes_data?: Array<{ name: string; link_embed: string; link_m3u8: string }>;
+  servers?: Array<{ name: string; episodes: Array<{ name: string; link_embed: string; link_m3u8: string }> }>;
+  genres?: string[];
+  country?: string;
+  director?: string;
+  actors?: string[];
 }
 
 export interface Category {

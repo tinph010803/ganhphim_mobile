@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Movie } from '@/types/movie';
 import { Colors } from '@/constants/colors';
@@ -8,7 +9,7 @@ interface MovieCardProps {
   width?: number;
 }
 
-export function MovieCard({ movie, width = 150 }: MovieCardProps) {
+export const MovieCard = memo(function MovieCard({ movie, width = 150 }: MovieCardProps) {
   const router = useRouter();
 
   const handlePress = () => {
@@ -52,16 +53,16 @@ export function MovieCard({ movie, width = 150 }: MovieCardProps) {
       </Text>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
-    marginRight: 12,
+    marginRight: 10,
   },
   imageContainer: {
     width: '100%',
     aspectRatio: 2 / 3,
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: Colors.cardBackground,
@@ -102,13 +103,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: Colors.text,
-    fontSize: 35 / 2.3,
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 10,
+    marginTop: 7,
   },
   titleEn: {
     color: Colors.textSecondary,
-    fontSize: 15 / 1.1,
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 3,
   },
 });
+

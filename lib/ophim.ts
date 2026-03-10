@@ -62,6 +62,24 @@ function mapOPhimMovie(raw: any): Movie {
   const currentEpisode = Math.max(toNumber(raw.episode_current, 1), 1);
   const rating = toNumber(raw.imdb?.vote_average ?? raw.tmdb?.vote_average ?? raw.imdb_rating, 0);
 
+  const genres: string[] = Array.isArray(raw.category)
+    ? raw.category.map((c: any) => String(c.name || '')).filter(Boolean)
+    : [];
+
+  const country: string = Array.isArray(raw.country)
+    ? (raw.country[0]?.name || '')
+    : String(raw.country?.name || raw.country || '');
+
+  const director: string = Array.isArray(raw.director)
+    ? raw.director.filter(Boolean).join(', ')
+    : String(raw.director || '');
+
+  const actors: string[] = Array.isArray(raw.actor)
+    ? raw.actor.filter(Boolean)
+    : typeof raw.actor === 'string' && raw.actor
+    ? [raw.actor]
+    : [];
+
   return {
     id: String(raw.slug || raw._id || raw.id || `${raw.name || 'movie'}-${raw.year || 'unknown'}`),
     slug: String(raw.slug || raw._id || raw.id || ''),
@@ -74,6 +92,7 @@ function mapOPhimMovie(raw: any): Movie {
     episodes: Math.max(episodeTotal, currentEpisode),
     current_episode: currentEpisode,
     duration: toNumber(raw.time, 0),
+    duration_text: String(raw.time || ''),
     quality: String(raw.quality || 'HD'),
     age_rating: String(raw.age_rating || 'T13'),
     is_series: Math.max(episodeTotal, currentEpisode) > 1,
@@ -88,6 +107,22 @@ function mapOPhimMovie(raw: any): Movie {
           link_m3u8: String(ep.link_m3u8 || ''),
         }))
       : [],
+    servers: Array.isArray(raw?.episodes)
+      ? raw.episodes.map((srv: any) => ({
+          name: String(srv.server_name || 'Server 1'),
+          episodes: Array.isArray(srv.server_data)
+            ? srv.server_data.map((ep: any) => ({
+                name: String(ep.name || ep.slug || 'Tập 1'),
+                link_embed: String(ep.link_embed || ''),
+                link_m3u8: String(ep.link_m3u8 || ''),
+              }))
+            : [],
+        }))
+      : [],
+    genres,
+    country,
+    director,
+    actors,
   };
 }
 
@@ -127,6 +162,66 @@ export async function getHomeMovies(): Promise<Movie[]> {
     return await homePendingPromise;
   } finally {
     homePendingPromise = null;
+  }
+}
+
+export async function getMoviesByCountry(country: string, page: number = 1): Promise<Movie[]> {
+  try {
+    const json = await fetchOPhim(`/v1/api/quoc-gia/${country}?page=${page}`);
+    const items = (json?.data?.items || json?.items || []) as any[];
+    return items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+  } catch {
+    return [];
+  }
+}
+
+function parseTotalPages(data: any): number {
+  const p = data?.params?.pagination ?? data?.pagination ?? {};
+  if (p.totalPages) return Number(p.totalPages);
+  if (p.total_pages) return Number(p.total_pages);
+  if (p.totalItems && p.totalItemsPerPage)
+    return Math.ceil(Number(p.totalItems) / Number(p.totalItemsPerPage));
+  if (p.total && p.limit) return Math.ceil(Number(p.total) / Number(p.limit));
+  return 1;
+}
+
+export async function getMoviesByCountryPaged(
+  country: string,
+  page: number = 1,
+): Promise<{ movies: Movie[]; totalPages: number }> {
+  try {
+    const json = await fetchOPhim(`/v1/api/quoc-gia/${country}?page=${page}`);
+    const items = (json?.data?.items || json?.items || []) as any[];
+    const totalPages = parseTotalPages(json?.data as any);
+    const movies = items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+    return { movies, totalPages };
+  } catch {
+    return { movies: [], totalPages: 1 };
+  }
+}
+
+export async function getMoviesByType(type: string, page: number = 1): Promise<Movie[]> {
+  try {
+    const json = await fetchOPhim(`/v1/api/danh-sach/${type}?page=${page}`);
+    const items = (json?.data?.items || json?.items || []) as any[];
+    return items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+  } catch {
+    return [];
+  }
+}
+
+export async function getMoviesByTypePaged(
+  type: string,
+  page: number = 1,
+): Promise<{ movies: Movie[]; totalPages: number }> {
+  try {
+    const json = await fetchOPhim(`/v1/api/danh-sach/${type}?page=${page}`);
+    const items = (json?.data?.items || json?.items || []) as any[];
+    const totalPages = parseTotalPages(json?.data as any);
+    const movies = items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+    return { movies, totalPages };
+  } catch {
+    return { movies: [], totalPages: 1 };
   }
 }
 

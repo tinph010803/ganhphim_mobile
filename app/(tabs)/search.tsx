@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { getHomeMovies } from '@/lib/ophim';
 import { Movie } from '@/types/movie';
@@ -38,21 +38,21 @@ export default function SearchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.logoContainer}>
-          <Image source={require('@/assets/images/icon.png')} style={styles.logo} />
+          <Image source={{ uri: 'https://i.ibb.co/dJ7CJ8Pf/logo-ganh-removebg-preview.png' }} style={styles.logo} />
           <View>
-            <Text style={styles.logoTitle}>RoPhim</Text>
-            <Text style={styles.logoSubtitle}>Phim hay cả rổ</Text>
+            <Text style={styles.logoTitle}>Gánh Phim</Text>
+            <Text style={styles.logoSubtitle}>Phim hay cả gánh</Text>
           </View>
         </View>
         <View style={styles.headerIcons}>
           <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-            <Bell size={24} color={Colors.text} />
+            <Bell size={20} color={Colors.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-            <Settings size={24} color={Colors.text} />
+            <Settings size={20} color={Colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -79,38 +79,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   logo: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 34,
+    height: 34,
+    resizeMode: 'contain',
   },
   logoTitle: {
     color: Colors.text,
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: '800',
   },
   logoSubtitle: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: 12,
     marginTop: -2,
   },
   headerIcons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.24)',
     justifyContent: 'center',
