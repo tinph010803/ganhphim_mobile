@@ -1,0 +1,36 @@
+export interface Movie {
+  id: string;
+  slug?: string;
+  title: string;
+  title_en: string;
+  description: string;
+  poster_url: string;
+  imdb_rating: number;
+  year: number;
+  episodes: number;
+  current_episode: number;
+  duration: number;
+  quality: string;
+  age_rating: string;
+  is_series: boolean;
+  is_featured: boolean;
+  created_at: string;
+  updated_at: string;
+  stream_url?: string;
+  episodes_data?: Array<{ name: string; link_embed: string; link_m3u8: string }>;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export interface Favorite {
+  id: string;
+  user_id: string;
+  movie_id: string;
+  movie?: Movie;
+  created_at: string;
+}
