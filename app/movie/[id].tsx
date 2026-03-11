@@ -302,7 +302,7 @@ export default function MovieDetailScreen() {
 
           {/* Centered poster */}
           <View style={styles.posterWrap}>
-            <Image source={{ uri: movie.poster_url }} style={styles.poster} resizeMode="cover" />
+            <Image source={{ uri: movie.thumb_url }} style={styles.poster} resizeMode="cover" />
           </View>
 
           {/* Title block */}
@@ -349,14 +349,19 @@ export default function MovieDetailScreen() {
                 </View>
               )}
 
-              {movie.is_series && (
-                <View style={styles.statusRow}>
-                  <RefreshCw size={13} color="#F5C518" />
-                  <Text style={styles.statusText}>
-                    Đang chiếu: {movie.current_episode} / {movie.episodes} tập
-                  </Text>
-                </View>
-              )}
+              {movie.is_series && (() => {
+                const s = movie.status;
+                const statusLabel = s === 'completed' ? 'Hoàn tất' : s === 'trailer' ? 'Sắp chiếu' : 'Đang chiếu';
+                const statusColor = s === 'completed' ? '#35D68D' : s === 'trailer' ? '#aaa' : '#F5C518';
+                return (
+                  <View style={styles.statusRow}>
+                    <RefreshCw size={13} color={statusColor} />
+                    <Text style={[styles.statusText, { color: statusColor }]}>
+                      {statusLabel}: {movie.current_episode} / {movie.episodes} tập
+                    </Text>
+                  </View>
+                );
+              })()}
 
               <Text style={styles.infoHeading}>Giới thiệu:</Text>
               <Text style={styles.infoBody}>{movie.description}</Text>
@@ -381,8 +386,9 @@ export default function MovieDetailScreen() {
 
           {/* Big watch button */}
           <TouchableOpacity
-            style={styles.watchBtnLarge}
-            activeOpacity={0.85}
+            style={[styles.watchBtnLarge, movie.status === 'trailer' && { opacity: 0.4 }]}
+            activeOpacity={movie.status === 'trailer' ? 1 : 0.85}
+            disabled={movie.status === 'trailer'}
             onPress={() => openPlayer(firstEpisodeUrl, firstEpisodeName, movie.servers?.[0]?.name ?? '')}
           >
             <LinearGradient
@@ -452,7 +458,7 @@ export default function MovieDetailScreen() {
         {/* ── Tab content ── */}
         <View style={styles.tabContent}>
 
-          {activeTab === 'Tập phim' && (() => {
+          {activeTab === 'Tập phim' && movie.status !== 'trailer' && (() => {
             const servers = (movie.servers?.length ?? 0) > 0 ? movie.servers! : [{ name: 'Vietsub #1', episodes: movie.episodes_data ?? [] }];
             const currentEps = servers[selectedServerIdx]?.episodes ?? [];
             return (
@@ -490,7 +496,7 @@ export default function MovieDetailScreen() {
                         onPress={() => openPlayer(ep.link_m3u8 || ep.link_embed, ep.name, servers[selectedServerIdx]?.name ?? '')}
                       >
                         <Play size={10} color="#fff" fill="#fff" />
-                        <Text style={styles.episodeBtnText}>{ep.name}</Text>
+                        <Text style={styles.episodeBtnText}>{!isNaN(Number(ep.name)) ? 'Tập ' + ep.name : ep.name}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>

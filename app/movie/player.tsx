@@ -64,10 +64,9 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 #btn-skip{position:absolute;bottom:105px;right:48px;z-index:50;background:transparent;border:1.5px solid rgba(255,255,255,.6);color:#fff;font-size:12px;font-weight:600;padding:6px 16px;border-radius:6px;cursor:pointer;display:none;pointer-events:all}
 #btn-skip.show{display:block}
 #btn-skip:active{opacity:.7}
-/* Lock bar */
-#lock-bar{position:absolute;bottom:22px;right:14px;z-index:100;display:none;pointer-events:all}
-#btn-lock2{background:rgba(30,30,30,.88);border:none;color:#fff;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
-#btn-lock2:active{background:rgba(80,80,80,.88)}
+/* Lock2 (unlock button, always on top outside #ov) */
+#btn-lock2{position:absolute;top:14px;left:54px;z-index:200;background:none;border:none;color:#fff;width:42px;height:42px;border-radius:50%;display:none;align-items:center;justify-content:center;cursor:pointer;pointer-events:all}
+#btn-lock2:active{background:rgba(255,255,255,.15)}
 /* Loading spinner */
 #spin-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
 #spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:#fff;border-radius:50%;animation:sp .75s linear infinite;display:none}
@@ -101,12 +100,10 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
   <div id="spin-wrap"><div id="spinner"></div></div>
   <div class="dtfb" id="dtfb-l"><div class="dtfb-circle"></div><div class="dtfb-label"></div></div>
   <div class="dtfb" id="dtfb-r"><div class="dtfb-circle"></div><div class="dtfb-label"></div></div>
-  <div id="lock-bar">
-    <button id="btn-lock2">
-      <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/></svg>
-    </button>
-  </div>
   <button id="btn-skip">B&#x1ECF; qua gi&#x1EDB;i thi&#x1EC7;u</button>
+  <button id="btn-lock2" style="display:none">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/></svg>
+  </button>
   <div id="ov">
     <div id="topbar">
       <button class="tb-btn" id="btn-back">
@@ -210,7 +207,7 @@ var v=document.getElementById('v'),
   ratioLbl=document.getElementById('ratio-lbl'),
   spdLbl=null,qlLbl=null;
 
-document.getElementById('top-title').textContent=EP?TT+' '+(/^\d+$/.test(EP.trim())?'T\u1eadp '+EP:EP):TT;
+document.getElementById('top-title').textContent=EP?TT+' | '+(EP.trim()!==''&&!isNaN(Number(EP.trim()))?'T\u1eadp '+EP:EP):TT;
 
 var hls=null,dur=0,quals=[],curQ=-1,curSpd=1,hideTimer=null,ctrlOn=false,locked=false,skipExpired=false;
 var SPDS=[0.25,0.5,0.75,1,1.25,1.5,2];
@@ -289,18 +286,18 @@ function toggleCtrl(){if(locked)return;ctrlOn?hideCtrl():showCtrl();}
 showCtrl();
 
 // Lock
+var lockBtn2=document.getElementById('btn-lock2');
 document.getElementById('btn-lock').addEventListener('click',function(e){
   e.stopPropagation();
   locked=true;
   if(hideTimer)clearTimeout(hideTimer);
   hideCtrl();
-  lockBar.style.display='block';
-  lockBar._lt=setTimeout(function(){lockBar.style.display='none';},2000);
+  lockBtn2.style.display='flex';
 });
-document.getElementById('btn-lock2').addEventListener('click',function(e){
+lockBtn2.addEventListener('click',function(e){
   e.stopPropagation();
   locked=false;
-  lockBar.style.display='none';
+  lockBtn2.style.display='none';
   showCtrl();
 });
 
@@ -308,14 +305,9 @@ document.getElementById('btn-lock2').addEventListener('click',function(e){
 var dtTimer=null,dtSide=null,dtFbTimer=null,scrubbing=false;
 wrap.addEventListener('click',function(e){
   if(locked){
-    if(!e.target.closest('#lock-bar')&&!e.target.closest('#btn-skip')){
-      if(lockBar._lt)clearTimeout(lockBar._lt);
-      lockBar.style.display='block';
-      lockBar._lt=setTimeout(function(){lockBar.style.display='none';},2000);
-    }
     return;
   }
-  if(e.target.closest('#ov button')||e.target.closest('.c-btn')||e.target.closest('#prog')||e.target.closest('#smenu')||e.target.closest('#btn-skip')||e.target.closest('#lock-bar'))return;
+  if(e.target.closest('#ov button')||e.target.closest('.c-btn')||e.target.closest('#prog')||e.target.closest('#smenu')||e.target.closest('#btn-skip'))return;
   var x=e.clientX,w=wrap.offsetWidth;
   var side=x<w*.32?'l':x>w*.68?'r':'m';
   if(dtTimer&&dtSide===side&&side!=='m'){
@@ -398,12 +390,12 @@ document.getElementById('btn-cast').addEventListener('click',function(e){e.stopP
 // Settings
 function buildSmMain(){
   var html='<div class="sm-head">C\u00e0i \u0111\u1eb7t</div>';
-  html+='<div class="sm-row" id="sm-row-spd"><span>T\u1ed1c \u0111\u1ed9 ph\u00e1t</span><span class="sm-val"><span id="sm-spd-lbl">B\u00ecnh th\u01b0\u1eddng</span>'+chevR+'</span></div>';
   if(quals.length>0)html+='<div class="sm-row" id="sm-row-ql"><span>Ch\u1ea5t l\u01b0\u1ee3ng</span><span class="sm-val"><span id="sm-ql-lbl">T\u1ef1 \u0111\u1ed9ng</span>'+chevR+'</span></div>';
+  html+='<div class="sm-row" id="sm-row-spd"><span>T\u1ed1c \u0111\u1ed9 ph\u00e1t</span><span class="sm-val"><span id="sm-spd-lbl">B\u00ecnh th\u01b0\u1eddng</span>'+chevR+'</span></div>';
   smMain.innerHTML=html;smSub.style.display='none';smMain.style.display='block';
   spdLbl=document.getElementById('sm-spd-lbl');qlLbl=document.getElementById('sm-ql-lbl');
-  document.getElementById('sm-row-spd').onclick=buildSpdPage;
   var rowQl=document.getElementById('sm-row-ql');if(rowQl)rowQl.onclick=buildQlPage;
+  document.getElementById('sm-row-spd').onclick=buildSpdPage;
 }
 function buildSpdPage(){
   var html='<div class="sm-back" id="sm-back">'+backIco+' T\u1ed1c \u0111\u1ed9 ph\u00e1t</div>';

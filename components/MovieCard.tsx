@@ -30,7 +30,7 @@ export const MovieCard = memo(function MovieCard({ movie, width = 150 }: MovieCa
     >
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: movie.poster_url }}
+          source={{ uri: movie.thumb_url }}
           style={styles.poster}
           resizeMode="cover"
         />

@@ -5,6 +5,7 @@ export interface Movie {
   title_en: string;
   description: string;
   poster_url: string;
+  thumb_url: string;
   imdb_rating: number;
   year: number;
   episodes: number;
@@ -14,6 +15,7 @@ export interface Movie {
   quality: string;
   age_rating: string;
   is_series: boolean;
+  status?: 'completed' | 'ongoing' | 'trailer' | string;
   is_featured: boolean;
   created_at: string;
   updated_at: string;

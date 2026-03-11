@@ -145,7 +145,7 @@ export default function HomeScreen() {
       }}
     >
       <View style={styles.top10ImageWrap}>
-        <Image source={{ uri: item.poster_url }} style={styles.top10Poster} resizeMode="cover" />
+        <Image source={{ uri: item.thumb_url }} style={styles.top10Poster} resizeMode="cover" />
         <View style={styles.top10RankWrap}>
           <Text style={styles.top10Rank}>{index + 1}</Text>
         </View>

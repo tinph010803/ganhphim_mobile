@@ -86,6 +86,7 @@ function mapOPhimMovie(raw: any): Movie {
     title: String(raw.name || raw.title || 'Đang cập nhật'),
     title_en: String(raw.origin_name || raw.title_en || raw.name || ''),
     description: stripHtml(String(raw.content || raw.description || 'Chưa có mô tả cho phim này.')),
+    thumb_url: normalizeImageUrl(raw.thumb_url || raw.poster_url),
     poster_url: normalizeImageUrl(raw.poster_url || raw.thumb_url),
     imdb_rating: Number(rating.toFixed(1)),
     year: toNumber(raw.year, new Date().getFullYear()),
@@ -96,6 +97,7 @@ function mapOPhimMovie(raw: any): Movie {
     quality: String(raw.quality || 'HD'),
     age_rating: String(raw.age_rating || 'T13'),
     is_series: Math.max(episodeTotal, currentEpisode) > 1,
+    status: String(raw.status || ''),
     is_featured: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -263,4 +265,105 @@ export async function getMovieBySlug(slug: string): Promise<Movie | null> {
   const movie = mapOPhimMovie(item);
   detailCache.set(slug, movie);
   return movie;
+}
+
+export async function getMoviesFilteredPaged(
+  params: {
+    movieType?: string;
+    country?: string;
+    genre?: string;
+    year?: number | null;
+    sort?: string;
+  },
+  page = 1,
+): Promise<{ movies: Movie[]; totalPages: number }> {
+  try {
+    const { movieType, country, genre, year, sort } = params;
+    const extra: string[] = [`page=${page}`];
+    if (year) extra.push(`year=${year}`);
+    if (sort) extra.push(`sort_field=${encodeURIComponent(sort)}`, `sort_type=desc`);
+
+    let path: string;
+    if (movieType) {
+      path = `/v1/api/danh-sach/${encodeURIComponent(movieType)}?${extra.join('&')}`;
+    } else if (genre) {
+      path = `/v1/api/the-loai/${encodeURIComponent(genre)}?${extra.join('&')}`;
+    } else if (country) {
+      path = `/v1/api/quoc-gia/${encodeURIComponent(country)}?${extra.join('&')}`;
+    } else {
+      path = `/v1/api/danh-sach/phim-moi?${extra.join('&')}`;
+    }
+
+    const json = await fetchOPhim(path);
+    const items = ((json?.data as any)?.items || []) as any[];
+    const totalPages = parseTotalPages(json?.data as any);
+    const movies = items.map(mapOPhimMovie).filter((m: Movie) => !!m.id && !!m.slug);
+    return { movies, totalPages };
+  } catch {
+    return { movies: [], totalPages: 1 };
+  }
+}
+
+export async function searchMovies(keyword: string): Promise<Movie[]> {
+  try {
+    const json = await fetchOPhim(`/v1/api/tim-kiem?keyword=${encodeURIComponent(keyword)}&limit=24`);
+    const items = (json?.data?.items || (json?.data as any)?.items || []) as any[];
+    return items.map(mapOPhimMovie).filter((m) => !!m.id && !!m.slug);
+  } catch {
+    return [];
+  }
+}
+
+export async function searchMoviesWithFilters(params: {
+  keyword?: string;
+  genre?: string;
+  country?: string;
+  type?: string;
+  year?: number | null;
+  sort?: string;
+}): Promise<Movie[]> {
+  try {
+    const { keyword, genre, country, type, year, sort } = params;
+    const kw = keyword?.trim() ?? '';
+
+    const extra: string[] = [];
+    if (year) extra.push(`year=${year}`);
+    if (sort) extra.push(`sort_field=${encodeURIComponent(sort)}`, `sort_type=desc`);
+
+    let path: string;
+
+    if (kw) {
+      const q: string[] = [`keyword=${encodeURIComponent(kw)}`, 'limit=24'];
+      if (genre) q.push(`the_loai=${genre}`);
+      if (country) q.push(`quoc_gia=${country}`);
+      if (type) q.push(`loai=${type}`);
+      q.push(...extra);
+      path = `/v1/api/tim-kiem?${q.join('&')}`;
+    } else if (type) {
+      const q: string[] = ['page=1'];
+      if (genre) q.push(`the_loai=${genre}`);
+      if (country) q.push(`quoc_gia=${country}`);
+      q.push(...extra);
+      path = `/v1/api/danh-sach/${encodeURIComponent(type)}?${q.join('&')}`;
+    } else if (genre) {
+      const q: string[] = ['page=1'];
+      if (country) q.push(`quoc_gia=${country}`);
+      q.push(...extra);
+      path = `/v1/api/the-loai/${encodeURIComponent(genre)}?${q.join('&')}`;
+    } else if (country) {
+      const q: string[] = ['page=1'];
+      q.push(...extra);
+      path = `/v1/api/quoc-gia/${encodeURIComponent(country)}?${q.join('&')}`;
+    } else {
+      const q: string[] = ['page=1'];
+      q.push(...extra);
+      path = `/v1/api/danh-sach/phim-bo?${q.join('&')}`;
+    }
+
+    const json = await fetchOPhim(path);
+    const items = ((json?.data as any)?.items || []) as any[];
+    return items.map(mapOPhimMovie).filter((m: Movie) => !!m.id && !!m.slug);
+  } catch {
+    return [];
+  }
 }
