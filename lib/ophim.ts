@@ -123,6 +123,8 @@ function mapOPhimMovie(raw: any): Movie {
     country,
     director,
     actors,
+    tmdb_id: raw.tmdb?.id ? Number(raw.tmdb.id) : undefined,
+    tmdb_type: raw.tmdb?.type === 'tv' ? 'tv' : 'movie',
   };
 }
 
@@ -219,6 +221,24 @@ export async function getMoviesByTypePaged(
     const items = (json?.data?.items || json?.items || []) as any[];
     const totalPages = parseTotalPages(json?.data as any);
     const movies = items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+    return { movies, totalPages };
+  } catch {
+    return { movies: [], totalPages: 1 };
+  }
+}
+
+export async function getMoviesByGenrePaged(
+  genre: string,
+  page: number = 1,
+  sort: 'moi-nhat' | 'xem-nhieu' = 'moi-nhat',
+): Promise<{ movies: Movie[]; totalPages: number }> {
+  try {
+    const sortParam =
+      sort === 'xem-nhieu' ? '&sort_field=view&sort_type=desc' : '';
+    const json = await fetchOPhim(`/v1/api/the-loai/${genre}?page=${page}${sortParam}`);
+    const items = (json?.data?.items || json?.items || []) as any[];
+    const totalPages = parseTotalPages(json?.data as any);
+    const movies = items.map(mapOPhimMovie).filter((m) => !!m.id && !!m.slug);
     return { movies, totalPages };
   } catch {
     return { movies: [], totalPages: 1 };

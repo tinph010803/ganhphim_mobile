@@ -24,6 +24,8 @@ export interface Movie {
   country?: string;
   director?: string;
   actors?: string[];
+  tmdb_id?: number;
+  tmdb_type?: 'movie' | 'tv';
 }
 
 export interface Category {

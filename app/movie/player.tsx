@@ -1,12 +1,14 @@
 ﻿import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View, StatusBar, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
+import { saveWatchProgress } from '@/lib/watchHistory';
 
-function buildPlayerHtml(m3u8Url: string, title: string, episode: string): string {
+function buildPlayerHtml(m3u8Url: string, title: string, episode: string, initialTime = 0): string {
   const safeUrl = JSON.stringify(m3u8Url);
   const safeTitle = JSON.stringify(title);
   const safeEpisode = JSON.stringify(episode);
+  const safeInitTime = JSON.stringify(initialTime);
   return `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -131,7 +133,7 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
 <script>
 (function(){
-var M=${safeUrl},TT=${safeTitle},EP=${safeEpisode};
+var M=${safeUrl},TT=${safeTitle},EP=${safeEpisode},INIT_TIME=${safeInitTime}||0;
 var v=document.getElementById('v'),
   wrap=document.getElementById('wrap'),
   ov=document.getElementById('ov'),
@@ -201,8 +203,16 @@ v.addEventListener('timeupdate',function(){
   tCur.textContent=fmt(v.currentTime);
   if(v.buffered.length>0)pbBuf.style.width=(v.buffered.end(v.buffered.length-1)/dur*100).toFixed(2)+'%';
 });
-v.addEventListener('loadedmetadata',function(){dur=v.duration;tDur.textContent=fmt(dur);});
+v.addEventListener('loadedmetadata',function(){dur=v.duration;tDur.textContent=fmt(dur);if(INIT_TIME>5&&INIT_TIME<dur-5){v.currentTime=INIT_TIME;}});
 v.addEventListener('durationchange',function(){dur=v.duration;tDur.textContent=fmt(dur);});
+
+// Progress reporting every 15s
+setInterval(function(){
+  if(!v.paused&&dur>0&&v.currentTime>0){
+    var msg=JSON.stringify({type:'progress',time:v.currentTime,duration:dur});
+    if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(msg);
+  }
+},15000);
 
 // Controls show/hide
 function showCtrl(keep){
@@ -337,11 +347,17 @@ document.addEventListener('keydown',function(e){
 
 export default function PlayerScreen() {
   const router = useRouter();
-  const { url, title, episode } = useLocalSearchParams<{
-    url: string;
-    title: string;
-    episode?: string;
-  }>();
+  const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime } =
+    useLocalSearchParams<{
+      url: string;
+      title: string;
+      episode?: string;
+      movieId?: string;
+      movieSlug?: string;
+      serverLabel?: string;
+      poster?: string;
+      initialTime?: string;
+    }>();
   const webViewRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -360,12 +376,41 @@ export default function PlayerScreen() {
   const safeTitle = Array.isArray(title) ? title[0] : (title ?? '');
   const safeEpisode = Array.isArray(episode) ? episode[0] : (episode ?? '');
   const safeUrl = Array.isArray(url) ? url[0] : (url ?? '');
+  const safeMovieId = Array.isArray(movieId) ? movieId[0] : (movieId ?? '');
+  const safeMovieSlug = Array.isArray(movieSlug) ? movieSlug[0] : (movieSlug ?? '');
+  const safeServerLabel = Array.isArray(serverLabel) ? serverLabel[0] : (serverLabel ?? '');
+  const safePoster = Array.isArray(poster) ? poster[0] : (poster ?? '');
+  const safeInitialTime = parseFloat(
+    Array.isArray(initialTime) ? initialTime[0] : (initialTime ?? '0')
+  ) || 0;
 
-  const htmlContent = buildPlayerHtml(safeUrl, safeTitle, safeEpisode);
+  const htmlContent = buildPlayerHtml(safeUrl, safeTitle, safeEpisode, safeInitialTime);
 
-  const handleMessage = (event: any) => {
-    if (event.nativeEvent.data === 'back') router.back();
-  };
+  const handleMessage = useCallback(
+    (event: any) => {
+      const data = event.nativeEvent.data;
+      if (data === 'back') {
+        router.back();
+        return;
+      }
+      try {
+        const msg = JSON.parse(data);
+        if (msg.type === 'progress' && safeMovieId && safeMovieSlug) {
+          saveWatchProgress({
+            movieId: safeMovieId,
+            movieSlug: safeMovieSlug,
+            movieTitle: safeTitle,
+            posterUrl: safePoster,
+            episodeName: safeEpisode,
+            serverLabel: safeServerLabel,
+            time: msg.time,
+            duration: msg.duration,
+          }).catch(() => {});
+        }
+      } catch {}
+    },
+    [safeMovieId, safeMovieSlug, safeTitle, safePoster, safeEpisode, safeServerLabel]
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>

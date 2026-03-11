@@ -1,179 +1,187 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  ActivityIndicator,
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Calendar, ChevronLeft, PackageOpen } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
-import { supabase } from '@/lib/supabase';
-import { Movie, Favorite } from '@/types/movie';
-import { ChevronLeft, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
-const MOCK_USER_ID = 'user-1';
+const ROPHIM_API = 'https://rophimm.net/baseapi/api/v1';
+const WINDOW_SIZE = 15;
+const DAY_NAMES = ['CN', 'Thu 2', 'Thu 3', 'Thu 4', 'Thu 5', 'Thu 6', 'Thu 7'];
 
-type TabType = 'movies' | 'actors';
+function toDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function buildInitialDays(from: Date, count: number): Date[] {
+  const result: Date[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(from);
+    d.setDate(from.getDate() + i);
+    result.push(d);
+  }
+  return result;
+}
+
+function isSameday(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+type ShowtimeItem = {
+  id: number;
+  episode: string;
+  show_date: string;
+  show_time: string | null;
+  movie: {
+    id: number;
+    name: string;
+    slug: string;
+    thumbnail: string;
+    poster: string;
+  };
+};
 
 export default function ScheduleScreen() {
-  const [activeTab, setActiveTab] = useState<TabType>('movies');
-  const [favorites, setFavorites] = useState<(Favorite & { movie: Movie })[]>([]);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const today = useRef(new Date()).current;
+  const [days, setDays] = useState<Date[]>(() => buildInitialDays(today, WINDOW_SIZE));
+  const [selectedDay, setSelectedDay] = useState<Date>(today);
+  const [items, setItems] = useState<ShowtimeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const dateBarRef = useRef<ScrollView>(null);
 
-  useEffect(() => {
-    loadFavorites();
-  }, []);
-
-  const loadFavorites = async () => {
+  const fetchSchedule = useCallback(async (date: Date) => {
+    setLoading(true);
+    setItems([]);
     try {
-      const { data } = await supabase
-        .from('favorites')
-        .select('*, movie:movies(*)')
-        .eq('user_id', MOCK_USER_ID)
-        .order('created_at', { ascending: false });
-
-      setFavorites((data as any) || []);
-    } catch (error) {
-      console.error('Error loading favorites:', error);
+      const res = await fetch(`${ROPHIM_API}/showtimes/by-date/${toDateStr(date)}`);
+      if (!res.ok) throw new Error('API error');
+      const data: ShowtimeItem[] = await res.json();
+      setItems(data);
+    } catch {
+      setItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const removeFavorite = async (favoriteId: string) => {
-    try {
-      await supabase.from('favorites').delete().eq('id', favoriteId);
-      setFavorites((prev) => prev.filter((f) => f.id !== favoriteId));
-    } catch (error) {
-      console.error('Error removing favorite:', error);
+  useEffect(() => {
+    fetchSchedule(selectedDay);
+  }, [selectedDay, fetchSchedule]);
+
+  useEffect(() => {
+    const idx = days.findIndex((d) => isSameday(d, selectedDay));
+    if (idx >= 0 && dateBarRef.current) {
+      dateBarRef.current.scrollTo({ x: Math.max(0, idx * 68 - 16), animated: true });
+    }
+  }, [selectedDay, days]);
+
+  const handleSelectDay = (day: Date) => {
+    setSelectedDay(day);
+    const lastDay = days[days.length - 1];
+    if (isSameday(day, lastDay)) {
+      const next = new Date(lastDay);
+      next.setDate(lastDay.getDate() + 1);
+      setDays((prev) => [...prev, ...buildInitialDays(next, WINDOW_SIZE)]);
     }
   };
+
+  const renderDateItem = (day: Date, idx: number) => {
+    const isSelected = isSameday(day, selectedDay);
+    const isToday = isSameday(day, today);
+    const dayName = isToday ? 'Hom nay' : DAY_NAMES[day.getDay()];
+    const dd = String(day.getDate()).padStart(2, '0');
+    const mm = String(day.getMonth() + 1).padStart(2, '0');
+    return (
+      <TouchableOpacity
+        key={idx}
+        style={[styles.dateItem, isSelected && styles.dateItemActive]}
+        onPress={() => handleSelectDay(day)}
+        activeOpacity={0.75}
+      >
+        <Text style={[styles.dateNum, isSelected && styles.dateNumActive]}>{dd}/{mm}</Text>
+        <Text style={[styles.dateName, isSelected && styles.dateNameActive]}>{dayName}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderItem = useCallback(({ item }: { item: ShowtimeItem }) => (
+    <TouchableOpacity
+      style={styles.movieCard}
+      activeOpacity={0.75}
+      onPress={() => router.push({ pathname: '/movie/[id]', params: { id: item.movie.slug } } as any)}
+    >
+      <Image
+        source={{ uri: item.movie.poster || item.movie.thumbnail }}
+        style={styles.movieThumb}
+        resizeMode="cover"
+      />
+      <View style={styles.movieInfo}>
+        <Text style={styles.movieName} numberOfLines={2}>{item.movie.name}</Text>
+        <Text style={styles.movieEpisode}>{item.episode}</Text>
+      </View>
+    </TouchableOpacity>
+  ), [router]);
+
+  const keyExtractor = useCallback((item: ShowtimeItem) => String(item.id), []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <ChevronLeft size={20} color={Colors.text} />
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+          <ChevronLeft size={24} color={Colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Yêu thích</Text>
-        <View style={styles.placeholder} />
+        <Calendar size={20} color={Colors.text} />
+        <Text style={styles.headerTitle}>Lich chieu</Text>
       </View>
 
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'movies' && styles.tabActive]}
-          onPress={() => setActiveTab('movies')}
-          activeOpacity={0.7}
+      <View style={styles.dateBarWrapper}>
+        <ScrollView
+          ref={dateBarRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dateBarContent}
         >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'movies' && styles.tabTextActive,
-            ]}
-          >
-            Phim
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'actors' && styles.tabActive]}
-          onPress={() => setActiveTab('actors')}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'actors' && styles.tabTextActive,
-            ]}
-          >
-            Diễn viên
-          </Text>
-        </TouchableOpacity>
+          {days.map((day, idx) => renderDateItem(day, idx))}
+        </ScrollView>
+        <View style={styles.dateBarBorder} />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {loading && <ActivityIndicator style={styles.loading} size="small" color={Colors.textSecondary} />}
-
-        {activeTab === 'movies' && (
-          <View style={styles.content}>
-            {favorites.length === 0 && !loading && (
-              <Text style={styles.emptyText}>Chưa có phim yêu thích</Text>
-            )}
-            {favorites.map((favorite) => (
-              <View key={favorite.id} style={styles.favoriteItem}>
-                <TouchableOpacity
-                  style={styles.favoriteContent}
-                  onPress={() => router.push(`/movie/${favorite.movie.id}`)}
-                  activeOpacity={0.7}
-                >
-                  <Image
-                    source={{ uri: favorite.movie.poster_url }}
-                    style={styles.thumbnail}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.posterBadgeRow}>
-                    <View style={styles.posterBadgeMuted}>
-                      <Text style={styles.posterBadgeText}>PĐ.{favorite.movie.current_episode}</Text>
-                    </View>
-                    {favorite.movie.is_series && favorite.movie.current_episode < favorite.movie.episodes && (
-                      <View style={styles.posterBadgeFresh}>
-                        <Text style={styles.posterBadgeText}>TM.{favorite.movie.current_episode}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.favoriteInfo}>
-                    <Text style={styles.favoriteTitle} numberOfLines={2}>
-                      {favorite.movie.title}
-                    </Text>
-                    <Text style={styles.favoriteTitleEn} numberOfLines={1}>
-                      {favorite.movie.title_en}
-                    </Text>
-                    <View style={styles.favoriteMetadata}>
-                      <Text style={styles.metadataText}>
-                        {favorite.movie.age_rating}
-                      </Text>
-                      <Text style={styles.metadataDot}>·</Text>
-                      <Text style={styles.metadataText}>
-                        {favorite.movie.year}
-                      </Text>
-                      {favorite.movie.is_series && (
-                        <>
-                          <Text style={styles.metadataDot}>·</Text>
-                          <Text style={styles.metadataText}>
-                            Tập {favorite.movie.current_episode}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => removeFavorite(favorite.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Trash2 size={14} color={Colors.error} />
-                      <Text style={styles.removeButtonText}>Bỏ thích</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {activeTab === 'actors' && (
-          <View style={styles.content}>
-            <Text style={styles.emptyText}>Chưa có diễn viên yêu thích</Text>
-          </View>
-        )}
-      </ScrollView>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : items.length === 0 ? (
+        <View style={styles.center}>
+          <PackageOpen size={48} color={Colors.textSecondary} style={styles.emptyIcon} />
+          <Text style={styles.emptyText}>Hôm nay không có lịch chiếu nào!</Text>
+        </View>
+      ) : (
+        <FlatList
+          style={styles.list}
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -185,150 +193,110 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 14,
   },
-  backButton: {
-    padding: 4,
+  backBtn: {
+    marginRight: 2,
   },
   headerTitle: {
     color: Colors.text,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
   },
-  placeholder: {
-    width: 32,
+  dateBarWrapper: {
+    height: 56,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
-    gap: 2,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    marginHorizontal: 16,
+  dateBarContent: {
+    paddingHorizontal: 8,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 8,
+  dateBarBorder: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  dateItem: {
+    width: 68,
+    height: 55,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 9,
-    backgroundColor: 'transparent',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
-  tabActive: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
+  dateItemActive: {
+    borderBottomColor: Colors.primary,
   },
-  tabText: {
+  dateNum: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  dateNumActive: {
+    color: Colors.primary,
+    fontWeight: '800',
+  },
+  dateName: {
+    color: Colors.textSecondary,
+    fontSize: 11,
+  },
+  dateNameActive: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    paddingTop: 4,
+    paddingBottom: 20,
+  },
+  movieCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  movieThumb: {
+    width: 130,
+    height: 85,
+    borderRadius: 8,
+    backgroundColor: Colors.cardBackground,
+  },
+  movieInfo: {
+    flex: 1,
+    gap: 8,
+  },
+  movieName: {
     color: Colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 21,
+  },
+  movieEpisode: {
+    color: Colors.primary,
     fontSize: 13,
     fontWeight: '600',
   },
-  tabTextActive: {
-    color: Colors.background,
-    fontWeight: '700',
-  },
-  scrollView: {
+  center: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
   },
-  content: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    paddingTop: 6,
-  },
-  loading: {
-    marginTop: 24,
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 4,
   },
   emptyText: {
     color: Colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 40,
-  },
-  favoriteItem: {
-    marginBottom: 16,
-  },
-  favoriteContent: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  thumbnail: {
-    width: 90,
-    height: 126,
-    borderRadius: 10,
-    backgroundColor: Colors.cardBackground,
-  },
-  posterBadgeRow: {
-    position: 'absolute',
-    left: 7,
-    bottom: 8,
-    flexDirection: 'row',
-    gap: 5,
-  },
-  posterBadgeMuted: {
-    backgroundColor: 'rgba(79, 90, 125, 0.95)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  posterBadgeFresh: {
-    backgroundColor: '#35D68D',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  posterBadgeText: {
-    color: Colors.white,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  favoriteInfo: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 2,
-  },
-  favoriteTitle: {
-    color: Colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  favoriteTitleEn: {
-    color: Colors.textSecondary,
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  favoriteMetadata: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 8,
-  },
-  metadataText: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  metadataDot: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-  },
-  removeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(245, 107, 112, 0.18)',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  removeButtonText: {
-    color: Colors.error,
-    fontSize: 13,
-    fontWeight: '700',
+    lineHeight: 22,
   },
 });

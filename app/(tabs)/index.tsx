@@ -8,15 +8,18 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
+import { GENRES } from '@/constants/filters';
 import { getHomeMovies, getMoviesByCountry, getMoviesByType } from '@/lib/ophim';
 import { Movie } from '@/types/movie';
 import { FeaturedCarousel } from '@/components/FeaturedCarousel';
 import { MovieSection } from '@/components/MovieSection';
-import { Bell, ChevronDown, ChevronRight, Settings } from 'lucide-react-native';
+import { Bell, ChevronDown, ChevronRight, Settings, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
 const FILTER_OPTIONS = ['Đề xuất', 'Phim bộ', 'Phim lẻ', 'Thể loại'];
@@ -50,6 +53,9 @@ export default function HomeScreen() {
   const [featuredMovies, setFeaturedMovies] = useState<Movie[]>([]);
   const [top10Movies, setTop10Movies] = useState<Movie[]>([]);
   const [sectionMovies, setSectionMovies] = useState<Record<string, Movie[]>>({});
+  const [genreModalVisible, setGenreModalVisible] = useState(false);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [genreSort, setGenreSort] = useState<'moi-nhat' | 'xem-nhieu'>('moi-nhat');
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -94,6 +100,40 @@ export default function HomeScreen() {
   );
 
   const sectionKeyExtractor = useCallback((item: SectionConfig) => item.key, []);
+
+  const handleFilterPress = useCallback((option: string) => {
+    if (option === 'Phim bộ') {
+      router.push({ pathname: '/category/[slug]', params: { slug: 'phim-bo', title: 'Phim bộ', type: 'list' } } as any);
+    } else if (option === 'Phim lẻ') {
+      router.push({ pathname: '/category/[slug]', params: { slug: 'phim-le', title: 'Phim lẻ', type: 'list' } } as any);
+    } else if (option === 'Thể loại') {
+      setSelectedGenres([]);
+      setGenreSort('moi-nhat');
+      setGenreModalVisible(true);
+    } else {
+      setSelectedFilter(option);
+    }
+  }, [router]);
+
+  const handleGenreApply = useCallback(() => {
+    setGenreModalVisible(false);
+    const primary = selectedGenres[0];
+    if (!primary) return;
+    const genreObj = GENRES.find((g) => g.slug === primary);
+    const genreNames = selectedGenres
+      .map((s) => GENRES.find((g) => g.slug === s)?.name ?? s)
+      .join(',');
+    router.push({
+      pathname: '/category/[slug]',
+      params: {
+        slug: primary,
+        title: 'Thể loại',
+        type: 'genre',
+        genres: genreNames,
+        sort: genreSort,
+      },
+    } as any);
+  }, [selectedGenres, genreSort, router]);
 
   const renderTop10Card = useCallback(({ item, index }: { item: Movie; index: number }) => (
     <TouchableOpacity
@@ -199,7 +239,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={option}
               style={[styles.filterButton, selectedFilter === option && styles.filterButtonActive]}
-              onPress={() => setSelectedFilter(option)}
+              onPress={() => handleFilterPress(option)}
               activeOpacity={0.7}
             >
               <Text style={[styles.filterButtonText, selectedFilter === option && styles.filterButtonTextActive]}>
@@ -227,6 +267,68 @@ export default function HomeScreen() {
         windowSize={5}
         style={styles.scrollView}
       />
+
+      {/* Genre picker modal */}
+      <Modal
+        visible={genreModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setGenreModalVisible(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setGenreModalVisible(false)} />
+        <View style={styles.genreModal}>
+          <View style={styles.genreModalHeader}>
+            <Text style={styles.genreModalTitle}>Thể loại</Text>
+            <TouchableOpacity onPress={() => setGenreModalVisible(false)}>
+              <X size={20} color={Colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.genreChipWrap} showsVerticalScrollIndicator={false}>
+            {GENRES.map((g) => {
+              const active = selectedGenres.includes(g.slug);
+              return (
+                <TouchableOpacity
+                  key={g.slug}
+                  style={[styles.genreChip, active && styles.genreChipActive]}
+                  onPress={() =>
+                    setSelectedGenres((prev) =>
+                      active ? prev.filter((s) => s !== g.slug) : [...prev, g.slug]
+                    )
+                  }
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.genreChipText, active && styles.genreChipTextActive]}>{g.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.genreSortRow}>
+            {(['moi-nhat', 'xem-nhieu'] as const).map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.sortChip, genreSort === s && styles.sortChipActive]}
+                onPress={() => setGenreSort(s)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.sortChipText, genreSort === s && styles.sortChipTextActive]}>
+                  {s === 'moi-nhat' ? 'Mới nhất' : 'Xem nhiều'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.applyBtn, selectedGenres.length === 0 && styles.applyBtnDisabled]}
+            onPress={handleGenreApply}
+            activeOpacity={0.85}
+            disabled={selectedGenres.length === 0}
+          >
+            <Text style={styles.applyBtnText}>Lọc kết quả</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -422,5 +524,97 @@ const styles = StyleSheet.create({
   },
   footerPadding: {
     paddingBottom: 24,
+  },
+
+  // Genre modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  genreModal: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 28,
+    maxHeight: '75%',
+  },
+  genreModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  genreModalTitle: {
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  genreChipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 12,
+  },
+  genreChip: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  genreChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  genreChipText: {
+    color: Colors.text,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  genreChipTextActive: {
+    color: Colors.background,
+    fontWeight: '700',
+  },
+  genreSortRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  sortChip: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+  sortChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  sortChipText: {
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sortChipTextActive: {
+    color: Colors.background,
+    fontWeight: '700',
+  },
+  applyBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  applyBtnDisabled: {
+    opacity: 0.4,
+  },
+  applyBtnText: {
+    color: Colors.background,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

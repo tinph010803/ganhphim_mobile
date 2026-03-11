@@ -332,7 +332,7 @@ export default function MovieDetailScreen() {
           <TouchableOpacity
             style={styles.watchBtnLarge}
             activeOpacity={0.85}
-            onPress={() => openPlayer(firstEpisodeUrl, firstEpisodeName, movie.servers?.[0]?.name ?? '')}
+            onPress={() => openPlayer(firstEpisodeUrl, firstEpisodeName)}
           >
             <LinearGradient
               colors={['#FECF59', '#FFF09A']}
@@ -436,7 +436,7 @@ export default function MovieDetailScreen() {
                         key={ep.name}
                         style={styles.episodeBtn}
                         activeOpacity={0.75}
-                        onPress={() => openPlayer(ep.link_m3u8 || ep.link_embed, ep.name, servers[selectedServerIdx]?.name ?? '')}
+                        onPress={() => openPlayer(ep.link_m3u8 || ep.link_embed, ep.name)}
                       >
                         <Play size={10} color="#fff" fill="#fff" />
                         <Text style={styles.episodeBtnText}>{ep.name}</Text>
@@ -448,7 +448,7 @@ export default function MovieDetailScreen() {
                     <TouchableOpacity
                       style={styles.episodeBtn}
                       activeOpacity={0.75}
-                      onPress={() => openPlayer(firstEpisodeUrl, 'Tập 1', servers?.[selectedServerIdx]?.name ?? '')}
+                      onPress={() => openPlayer(firstEpisodeUrl, 'Tập 1')}
                     >
                       <Play size={10} color="#fff" fill="#fff" />
                       <Text style={styles.episodeBtnText}>Tập 1</Text>
