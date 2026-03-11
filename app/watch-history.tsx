@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronLeft, Play, Trash2, Clock } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
+import { useAuth } from '@/context/AuthContext';
 import {
   WatchHistoryEntry,
   getWatchHistory,
@@ -22,24 +23,26 @@ import {
 
 export default function WatchHistoryScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [history, setHistory] = useState<WatchHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       loadHistory();
-    }, [])
+    }, [userId])
   );
 
   async function loadHistory() {
     setLoading(true);
-    const list = await getWatchHistory();
+    const list = await getWatchHistory(userId);
     setHistory(list);
     setLoading(false);
   }
 
   function handleRemove(item: WatchHistoryEntry) {
-    removeWatchEntry(item.movieId, item.episodeName);
+    removeWatchEntry(item.movieId, item.episodeName, userId);
     setHistory((prev) =>
       prev.filter(
         (e) => !(e.movieId === item.movieId && e.episodeName === item.episodeName)
@@ -54,7 +57,7 @@ export default function WatchHistoryScreen() {
         text: 'Xoá tất cả',
         style: 'destructive',
         onPress: async () => {
-          await clearWatchHistory();
+          await clearWatchHistory(userId);
           setHistory([]);
         },
       },

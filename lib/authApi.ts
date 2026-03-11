@@ -248,3 +248,49 @@ export async function apiRemoveFavorite(
     body: JSON.stringify({ movieId }),
   });
 }
+
+/* ─── Watch History ───────────────────────────────────────── */
+export interface WatchHistoryPayload {
+  movieId: string;
+  movieSlug: string;
+  movieTitle: string;
+  posterUrl: string;
+  episodeName: string;
+  serverLabel: string;
+  time: number;
+  duration: number;
+}
+
+export async function apiSaveWatchProgress(
+  payload: WatchHistoryPayload
+): Promise<void> {
+  await authRequest<null>('/api/v1/watch-history/save', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function apiGetWatchHistory(
+  limit = 50
+): Promise<WatchHistoryPayload[]> {
+  const res = await authRequest<WatchHistoryPayload[]>(
+    `/api/v1/watch-history?limit=${limit}`
+  );
+  return res.data ?? [];
+}
+
+export async function apiRemoveWatchEntry(
+  movieId: string,
+  episodeName?: string
+): Promise<void> {
+  await authRequest<null>('/api/v1/watch-history/remove', {
+    method: 'POST',
+    body: JSON.stringify({ movieId, episodeName }),
+  });
+}
+
+export async function apiClearWatchHistory(): Promise<void> {
+  await authRequest<null>('/api/v1/watch-history/clear', {
+    method: 'POST',
+  });
+}

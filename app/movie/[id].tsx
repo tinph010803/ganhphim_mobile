@@ -49,15 +49,21 @@ function isUuid(value: string): boolean {
 
 export default function MovieDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, resumeTime, resumeEpisode, resumeServer } = useLocalSearchParams<{
+    id: string;
+    resumeTime?: string;
+    resumeEpisode?: string;
+    resumeServer?: string;
+  }>();
   const { user, tokens } = useAuth();
   const { showToast } = useToast();
+  const didAutoResume = useRef(false);
   const [movie, setMovie] = useState<Movie | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const gtavnMovieIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [playerParams, setPlayerParams] = useState<{ url: string; title: string; episode: string; movieId: string; movieSlug: string; serverLabel: string; poster: string } | null>(null);
+  const [playerParams, setPlayerParams] = useState<{ url: string; title: string; episode: string; movieId: string; movieSlug: string; serverLabel: string; poster: string; initialTime?: string } | null>(null);
   const [infoExpanded, setInfoExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('Tập phim');
   const [selectedServerIdx, setSelectedServerIdx] = useState(0);
@@ -129,6 +135,50 @@ export default function MovieDetailScreen() {
     }
   }, [id, user]);
 
+  // Auto-resume: open player directly when navigated from watch history
+  useEffect(() => {
+    if (!movie || didAutoResume.current || !resumeTime) return;
+    didAutoResume.current = true;
+    const servers = (movie.servers?.length ?? 0) > 0
+      ? movie.servers!
+      : [{ name: 'Vietsub #1', episodes: movie.episodes_data ?? [] }];
+
+    // Find the matching episode across all servers
+    let targetUrl = '';
+    let targetEpisode = resumeEpisode ?? '';
+    let targetServer = resumeServer ?? '';
+
+    outer: for (const srv of servers) {
+      if (targetServer && srv.name !== targetServer) continue;
+      for (const ep of srv.episodes) {
+        if (ep.name === targetEpisode) {
+          targetUrl = ep.link_m3u8 || ep.link_embed;
+          targetServer = srv.name;
+          break outer;
+        }
+      }
+    }
+    // Fallback: first episode if nothing matched
+    if (!targetUrl) {
+      const firstSrv = servers[0];
+      targetUrl = firstSrv?.episodes?.[0]?.link_m3u8 || firstSrv?.episodes?.[0]?.link_embed || movie.stream_url || '';
+      targetEpisode = firstSrv?.episodes?.[0]?.name ?? '';
+      targetServer = firstSrv?.name ?? '';
+    }
+    if (!targetUrl) return;
+
+    setPlayerParams({
+      url: targetUrl,
+      title: movie.title ?? '',
+      episode: targetEpisode,
+      movieId: gtavnMovieIdRef.current ?? id ?? '',
+      movieSlug: id ?? '',
+      serverLabel: targetServer,
+      poster: movie.poster_url ?? '',
+      initialTime: String(Math.floor(Number(resumeTime) || 0)),
+    });
+  }, [movie, resumeTime, resumeEpisode, resumeServer]);
+
   const loadMovie = async () => {
     try {
       const ophimMovie = await getMovieBySlug(id);
@@ -169,7 +219,7 @@ export default function MovieDetailScreen() {
     } catch {}
   };
 
-  const openPlayer = (url: string, episodeName?: string, srvLabel?: string) => {
+  const openPlayer = (url: string, episodeName?: string, srvLabel?: string, startTime?: number) => {
     if (!url) return;
     setPlayerParams({
       url,
@@ -179,6 +229,7 @@ export default function MovieDetailScreen() {
       movieSlug: id ?? '',
       serverLabel: srvLabel ?? '',
       poster: movie?.poster_url ?? '',
+      ...(startTime && startTime > 0 ? { initialTime: String(Math.floor(startTime)) } : {}),
     });
   };
 

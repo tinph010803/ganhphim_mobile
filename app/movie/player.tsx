@@ -1,8 +1,10 @@
 ﻿import { useLocalSearchParams, useRouter } from 'expo-router';
-import { View, StatusBar, Platform } from 'react-native';
+import { View, StatusBar, Platform, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { saveWatchProgress } from '@/lib/watchHistory';
+import { useAuth } from '@/context/AuthContext';
+import * as NavigationBar from 'expo-navigation-bar';
 
 function buildPlayerHtml(m3u8Url: string, title: string, episode: string, initialTime = 0): string {
   const safeUrl = JSON.stringify(m3u8Url);
@@ -23,36 +25,49 @@ html,body,#wrap{width:100%;height:100%;background:#000;overflow:hidden}
 background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transparent 68%,rgba(0,0,0,.8) 100%)}
 #ov.show{opacity:1;pointer-events:all}
 /* Top bar */
-#topbar{display:flex;align-items:center;gap:10px;padding:10px 14px 8px;flex-shrink:0}
-.tb-btn{background:none;border:none;color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+#topbar{display:flex;align-items:center;padding:14px 12px 8px;flex-shrink:0;gap:2px}
+.tb-btn{background:none;border:none;color:#fff;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .tb-btn:active{background:rgba(255,255,255,.15)}
-#top-info{flex:1;min-width:0}
-#top-title{font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
-#top-ep{font-size:11px;color:rgba(255,255,255,.55);margin-top:1px}
+#top-info{flex:1;text-align:center;min-width:0;padding:0 2px}
+#top-title{font-size:15px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#top-ep{display:none}
 /* Center controls */
-#center{flex:1;display:flex;align-items:center;justify-content:center;gap:20px}
-.c-btn{background:rgba(0,0,0,.35);border:none;color:#fff;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px);transition:background .15s,transform .1s}
-.c-btn:active{background:rgba(255,255,255,.2);transform:scale(.92)}
-#c-play{width:62px;height:62px;}
+#center{flex:1;display:flex;align-items:center;justify-content:center;gap:32px}
+.c-btn{background:rgba(0,0,0,.4);border:none;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,transform .12s;flex-shrink:0}
+.c-btn:active{background:rgba(255,255,255,.2);transform:scale(.88)}
 /* Bottom bar */
-#botbar{display:flex;flex-direction:column;gap:4px;padding:0 14px 10px;flex-shrink:0}
+#botbar{display:flex;flex-direction:column;align-items:center;padding:0 0 10px;flex-shrink:0}
 /* Progress */
-#prog{position:relative;height:20px;display:flex;align-items:center;cursor:pointer;touch-action:none}
-.pb{position:absolute;left:0;top:50%;transform:translateY(-50%);height:3px;border-radius:2px;pointer-events:none;transition:height .12s}
-#prog:active .pb{height:5px}
-#pb-bg{width:100%;background:rgba(255,255,255,.2)}
+#prog-wrap{display:flex;flex-direction:column;align-items:stretch;width:75%;align-self:center}
+#prog{position:relative;width:100%;height:22px;display:flex;align-items:center;cursor:pointer;touch-action:none}
+#timerow{display:flex;align-items:center;width:100%;padding:2px 0 5px}
+.pb{position:absolute;left:0;top:50%;transform:translateY(-50%);height:2px;border-radius:2px;pointer-events:none;transition:height .12s}
+#prog:active .pb,#prog.drag .pb{height:4px}
+#pb-bg{width:100%;background:rgba(255,255,255,.22)}
 #pb-buf{background:rgba(255,255,255,.35);width:0%}
-#pb-fill{background:#ff0000;width:0%}
-#pb-thumb{position:absolute;top:50%;left:0%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#ff0000;pointer-events:none;transition:transform .1s}
-#prog:active #pb-thumb{transform:translate(-50%,-50%) scale(1.4)}
+#pb-fill{background:#e50914;width:0%}
+#pb-thumb{position:absolute;top:50%;left:0%;transform:translate(-50%,-50%);width:12px;height:12px;border-radius:50%;background:#e50914;pointer-events:none;box-shadow:0 0 4px rgba(229,9,20,.55)}
+#prog:active #pb-thumb,#prog.drag #pb-thumb{transform:translate(-50%,-50%) scale(1.4)}
 /* Time row */
-#timerow{display:flex;align-items:center;gap:6px}
-#t-cur,#t-dur{font-size:12px;color:#fff;font-variant-numeric:tabular-nums}
-.tsep{font-size:12px;color:rgba(255,255,255,.4)}
+#timerow{display:flex;align-items:center;width:100%;padding:2px 0 5px}
+#t-cur,#t-dur{font-size:12px;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:.2px}
+.tsep{font-size:12px;color:rgba(255,255,255,.45);padding:0 2px}
 #t-sp{flex:1}
-#btn-spd{background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;font-weight:700;padding:4px 6px;border-radius:4px;cursor:pointer;}
-#btn-spd:active{background:rgba(255,255,255,.12)}
-#btn-fs{background:none;border:none;color:#fff;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+#btn-fs{display:none}
+/* Icon row */
+#icrow{display:flex;align-items:center;justify-content:center;padding-top:6px;margin-top:2px;gap:0;width:100%}
+.ic-btn{background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:4px 18px;flex-shrink:0}
+.ic-btn:active{opacity:.55}
+.ic-label{font-size:9.5px;color:rgba(255,255,255,.8);white-space:nowrap}
+.ic-sep{display:none}
+/* Skip intro */
+#btn-skip{position:absolute;bottom:105px;right:48px;z-index:50;background:transparent;border:1.5px solid rgba(255,255,255,.6);color:#fff;font-size:12px;font-weight:600;padding:6px 16px;border-radius:6px;cursor:pointer;display:none;pointer-events:all}
+#btn-skip.show{display:block}
+#btn-skip:active{opacity:.7}
+/* Lock bar */
+#lock-bar{position:absolute;bottom:22px;right:14px;z-index:100;display:none;pointer-events:all}
+#btn-lock2{background:rgba(30,30,30,.88);border:none;color:#fff;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
+#btn-lock2:active{background:rgba(80,80,80,.88)}
 /* Loading spinner */
 #spin-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
 #spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:#fff;border-radius:50%;animation:sp .75s linear infinite;display:none}
@@ -66,7 +81,7 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 .dtfb-label{font-size:11px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7);white-space:nowrap}
 @keyframes rp{from{transform:scale(.5);opacity:.8}to{transform:scale(1.3);opacity:0}}
 /* Settings panel */
-#smenu{position:absolute;top:54px;right:14px;background:rgba(20,20,20,.97);border-radius:10px;min-width:200px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.7);display:none;z-index:50;animation:sm-in .15s ease}
+#smenu{position:absolute;top:60px;right:14px;background:rgba(20,20,20,.97);border-radius:10px;min-width:200px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.7);display:none;z-index:50;animation:sm-in .15s ease}
 #smenu.open{display:block}
 @keyframes sm-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 .sm-head{font-size:11px;color:rgba(255,255,255,.4);padding:10px 14px 6px;letter-spacing:.5px;text-transform:uppercase}
@@ -77,7 +92,7 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 .sm-back:active{background:rgba(255,255,255,.07)}
 .sm-opt{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;font-size:14px;color:rgba(255,255,255,.8);cursor:pointer}
 .sm-opt:active{background:rgba(255,255,255,.06)}
-.sm-opt.on{color:#ff4444;font-weight:600}
+.sm-opt.on{color:#e50914;font-weight:600}
 </style>
 </head>
 <body>
@@ -86,42 +101,81 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
   <div id="spin-wrap"><div id="spinner"></div></div>
   <div class="dtfb" id="dtfb-l"><div class="dtfb-circle"></div><div class="dtfb-label"></div></div>
   <div class="dtfb" id="dtfb-r"><div class="dtfb-circle"></div><div class="dtfb-label"></div></div>
+  <div id="lock-bar">
+    <button id="btn-lock2">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/></svg>
+    </button>
+  </div>
+  <button id="btn-skip">B&#x1ECF; qua gi&#x1EDB;i thi&#x1EC7;u</button>
   <div id="ov">
     <div id="topbar">
       <button class="tb-btn" id="btn-back">
         <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
       </button>
+      <button class="tb-btn" id="btn-lock">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+      </button>
       <div id="top-info">
         <div id="top-title"></div>
-        <div id="top-ep"></div>
+        <div id="top-ep" style="display:none"></div>
       </div>
+      <button class="tb-btn" id="btn-cast">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M21 3H3c-1.1 0-2 .9-2 2v3h2V5h18v14h-7v2h7c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM1 18v3h3c0-1.66-1.34-3-3-3zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.93-11-11-11z"/></svg>
+      </button>
       <button class="tb-btn" id="btn-set">
         <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
       </button>
     </div>
     <div id="center">
-      <button class="c-btn" id="c-back">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="8.5" y="14.5" font-size="5.5" fill="white" font-family="sans-serif" font-weight="bold">10</text></svg>
+      <button class="c-btn" id="c-back" style="width:58px;height:58px">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="34" height="34">
+          <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+          <text x="12" y="15.5" text-anchor="middle" font-size="5.5" fill="white" font-family="sans-serif" font-weight="bold">10</text>
+        </svg>
       </button>
-      <button class="c-btn" id="c-play">
-        <svg id="ico-play" viewBox="0 0 24 24" fill="currentColor" width="30" height="30"><path d="M8 5v14l11-7z"/></svg>
+      <button class="c-btn" id="c-play" style="width:72px;height:72px">
+        <svg id="ico-play" viewBox="0 0 24 24" fill="currentColor" width="32" height="32"><path d="M8 5v14l11-7z"/></svg>
       </button>
-      <button class="c-btn" id="c-fwd">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="8.5" y="14.5" font-size="5.5" fill="white" font-family="sans-serif" font-weight="bold">10</text></svg>
+      <button class="c-btn" id="c-fwd" style="width:58px;height:58px">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="34" height="34">
+          <path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/>
+          <text x="12" y="15.5" text-anchor="middle" font-size="5.5" fill="white" font-family="sans-serif" font-weight="bold">10</text>
+        </svg>
       </button>
     </div>
     <div id="botbar">
-      <div id="prog">
-        <div class="pb" id="pb-bg"></div>
-        <div class="pb" id="pb-buf"></div>
-        <div class="pb" id="pb-fill"></div>
-        <div id="pb-thumb"></div>
+      <div id="prog-wrap">
+        <div id="prog">
+          <div class="pb" id="pb-bg"></div>
+          <div class="pb" id="pb-buf"></div>
+          <div class="pb" id="pb-fill"></div>
+          <div id="pb-thumb"></div>
+        </div>
+        <div id="timerow">
+          <span id="t-cur">0:00</span><div id="t-sp"></div><span id="t-dur">0:00</span>
+          <button id="btn-fs"><svg id="ico-fs" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
+        </div>
       </div>
-      <div id="timerow">
-        <span id="t-cur">0:00</span><span class="tsep">/</span><span id="t-dur">0:00</span>
-        <div id="t-sp"></div>
-        <button id="btn-spd">1x</button>
-        <button id="btn-fs"><svg id="ico-fs" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg></button>
+      <div id="icrow">
+        <button class="ic-btn" id="btn-ratio">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 12h-2v3h-3v2h5v-5zM7 9h3V7H5v5h2V9zm14-6H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.99h18v14.02z"/></svg>
+          <span class="ic-label" id="ratio-lbl">T&#x1EF7; l&#x1EC7;</span>
+        </button>
+        <div class="ic-sep"></div>
+        <button class="ic-btn" id="btn-audio">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 15 6.7 12H5c0 3.42 2.72 6.23 6 6.72V21h2v-2.28c3.28-.49 6-3.3 6-6.72h-1.7z"/></svg>
+          <span class="ic-label">Ti&#x1EBF;ng g&#x1ED1;c</span>
+        </button>
+        <div class="ic-sep"></div>
+        <button class="ic-btn" id="btn-eplist">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12zM10 9h8v2h-8zm0 3h4v2h-4zm0-6h8v2h-8z"/></svg>
+          <span class="ic-label">Danh s&#xE1;ch t&#x1EAD;p</span>
+        </button>
+        <div class="ic-sep"></div>
+        <button class="ic-btn" id="btn-next">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          <span class="ic-label">T&#x1EAD;p ti&#x1EBF;p theo</span>
+        </button>
       </div>
     </div>
   </div>
@@ -151,13 +205,17 @@ var v=document.getElementById('v'),
   smenu=document.getElementById('smenu'),
   smMain=document.getElementById('sm-main'),
   smSub=document.getElementById('sm-sub'),
+  skipBtn=document.getElementById('btn-skip'),
+  lockBar=document.getElementById('lock-bar'),
+  ratioLbl=document.getElementById('ratio-lbl'),
   spdLbl=null,qlLbl=null;
 
-document.getElementById('top-title').textContent=TT;
-document.getElementById('top-ep').textContent=EP?'T\u1eadp '+EP:'';
+document.getElementById('top-title').textContent=EP?TT+' '+(/^\d+$/.test(EP.trim())?'T\u1eadp '+EP:EP):TT;
 
-var hls=null,dur=0,quals=[],curQ=-1,curSpd=1,hideTimer=null,ctrlOn=false;
+var hls=null,dur=0,quals=[],curQ=-1,curSpd=1,hideTimer=null,ctrlOn=false,locked=false,skipExpired=false;
 var SPDS=[0.25,0.5,0.75,1,1.25,1.5,2];
+var RATIOS=['contain','cover','fill'];
+var RATIO_LABELS=['T\u1ef7 l\u1ec7','\u0110\u1ea7y m\u00e0n h\u00ecnh','K\u00e9o gi\u00e3n'];
 var chk='<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
 var chevR='<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
 var backIco='<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>';
@@ -202,32 +260,62 @@ v.addEventListener('timeupdate',function(){
   pbFill.style.width=pct+'%';pbThumb.style.left=pct+'%';
   tCur.textContent=fmt(v.currentTime);
   if(v.buffered.length>0)pbBuf.style.width=(v.buffered.end(v.buffered.length-1)/dur*100).toFixed(2)+'%';
+  if(!skipExpired&&v.currentTime>0&&v.currentTime<=15){skipBtn.classList.add('show');}
+  else{if(v.currentTime>15)skipExpired=true;skipBtn.classList.remove('show');}
 });
 v.addEventListener('loadedmetadata',function(){dur=v.duration;tDur.textContent=fmt(dur);if(INIT_TIME>5&&INIT_TIME<dur-5){v.currentTime=INIT_TIME;}});
 v.addEventListener('durationchange',function(){dur=v.duration;tDur.textContent=fmt(dur);});
 
-// Progress reporting every 15s
+// Skip intro
+skipBtn.addEventListener('click',function(e){e.stopPropagation();skipExpired=true;skipBtn.classList.remove('show');v.currentTime=90;});
+
+// Progress reporting every 10s
 setInterval(function(){
   if(!v.paused&&dur>0&&v.currentTime>0){
     var msg=JSON.stringify({type:'progress',time:v.currentTime,duration:dur});
     if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(msg);
   }
-},15000);
+},10000);
 
 // Controls show/hide
 function showCtrl(keep){
+  if(locked)return;
   ctrlOn=true;ov.classList.add('show');
   if(hideTimer)clearTimeout(hideTimer);
   if(!keep)hideTimer=setTimeout(function(){if(!v.paused&&!scrubbing&&!smenu.classList.contains('open'))hideCtrl();},3000);
 }
 function hideCtrl(){ctrlOn=false;ov.classList.remove('show');smenu.classList.remove('open');}
-function toggleCtrl(){ctrlOn?hideCtrl():showCtrl();}
+function toggleCtrl(){if(locked)return;ctrlOn?hideCtrl():showCtrl();}
 showCtrl();
 
-// Double-tap + tap handling
+// Lock
+document.getElementById('btn-lock').addEventListener('click',function(e){
+  e.stopPropagation();
+  locked=true;
+  if(hideTimer)clearTimeout(hideTimer);
+  hideCtrl();
+  lockBar.style.display='block';
+  lockBar._lt=setTimeout(function(){lockBar.style.display='none';},2000);
+});
+document.getElementById('btn-lock2').addEventListener('click',function(e){
+  e.stopPropagation();
+  locked=false;
+  lockBar.style.display='none';
+  showCtrl();
+});
+
+// Tap + double-tap handling
 var dtTimer=null,dtSide=null,dtFbTimer=null,scrubbing=false;
 wrap.addEventListener('click',function(e){
-  if(e.target.closest('#ov button')||e.target.closest('.c-btn')||e.target.closest('#prog')||e.target.closest('#smenu'))return;
+  if(locked){
+    if(!e.target.closest('#lock-bar')&&!e.target.closest('#btn-skip')){
+      if(lockBar._lt)clearTimeout(lockBar._lt);
+      lockBar.style.display='block';
+      lockBar._lt=setTimeout(function(){lockBar.style.display='none';},2000);
+    }
+    return;
+  }
+  if(e.target.closest('#ov button')||e.target.closest('.c-btn')||e.target.closest('#prog')||e.target.closest('#smenu')||e.target.closest('#btn-skip')||e.target.closest('#lock-bar'))return;
   var x=e.clientX,w=wrap.offsetWidth;
   var side=x<w*.32?'l':x>w*.68?'r':'m';
   if(dtTimer&&dtSide===side&&side!=='m'){
@@ -261,9 +349,9 @@ function doSeek(cx){
   tCur.textContent=fmt(ratio*(dur||0));
   if(dur)v.currentTime=ratio*dur;
 }
-prog.addEventListener('touchstart',function(e){e.stopPropagation();scrubbing=true;doSeek(e.touches[0].clientX);showCtrl(true);},{passive:false});
+prog.addEventListener('touchstart',function(e){e.stopPropagation();scrubbing=true;prog.classList.add('drag');doSeek(e.touches[0].clientX);showCtrl(true);},{passive:false});
 prog.addEventListener('touchmove',function(e){if(!scrubbing)return;e.stopPropagation();e.preventDefault();doSeek(e.touches[0].clientX);},{passive:false});
-prog.addEventListener('touchend',function(e){e.stopPropagation();scrubbing=false;showCtrl();},{passive:false});
+prog.addEventListener('touchend',function(e){e.stopPropagation();scrubbing=false;prog.classList.remove('drag');showCtrl();},{passive:false});
 prog.addEventListener('click',function(e){e.stopPropagation();doSeek(e.clientX);showCtrl();});
 
 // Fullscreen
@@ -279,6 +367,33 @@ document.getElementById('btn-fs').addEventListener('click',function(e){
 });
 document.addEventListener('fullscreenchange',updFs);document.addEventListener('webkitfullscreenchange',updFs);
 function updFs(){var fs=!!(document.fullscreenElement||document.webkitFullscreenElement);icoFs.innerHTML=fs?'<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>':'<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>';}
+
+// Aspect ratio cycle
+var curRatio=0;
+document.getElementById('btn-ratio').addEventListener('click',function(e){
+  e.stopPropagation();
+  curRatio=(curRatio+1)%3;
+  v.style.objectFit=RATIOS[curRatio];
+  ratioLbl.textContent=RATIO_LABELS[curRatio];
+  showCtrl();
+});
+
+// Episode list
+document.getElementById('btn-eplist').addEventListener('click',function(e){
+  e.stopPropagation();
+  if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'eplist'}));
+  showCtrl();
+});
+
+// Next episode
+document.getElementById('btn-next').addEventListener('click',function(e){
+  e.stopPropagation();
+  if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'next'}));
+  showCtrl();
+});
+
+// Cast (visual only)
+document.getElementById('btn-cast').addEventListener('click',function(e){e.stopPropagation();showCtrl();});
 
 // Settings
 function buildSmMain(){
@@ -298,7 +413,6 @@ function buildSpdPage(){
   smSub.querySelectorAll('.sm-opt').forEach(function(el){el.onclick=function(){
     var s=parseFloat(el.getAttribute('data-s'));v.playbackRate=s;curSpd=s;
     if(spdLbl)spdLbl.textContent=spdLabel(s);
-    document.getElementById('btn-spd').textContent=s===1?'1x':s+'x';
     buildSmMain();
   };});
 }
@@ -319,13 +433,10 @@ document.getElementById('btn-set').addEventListener('click',function(e){
   e.stopPropagation();smenu.classList.toggle('open');
   if(smenu.classList.contains('open')){buildSmMain();showCtrl(true);}
 });
-document.getElementById('btn-spd').addEventListener('click',function(e){
-  e.stopPropagation();smenu.classList.add('open');buildSpdPage();showCtrl(true);
-});
 smenu.addEventListener('click',function(e){e.stopPropagation();});
-document.addEventListener('click',function(e){if(!e.target.closest('#smenu')&&!e.target.closest('#btn-set')&&!e.target.closest('#btn-spd'))smenu.classList.remove('open');});
+document.addEventListener('click',function(e){if(!e.target.closest('#smenu')&&!e.target.closest('#btn-set'))smenu.classList.remove('open');});
 
-// Back button â€” gá»­i message vá» React Native
+// Back button
 document.getElementById('btn-back').addEventListener('click',function(e){
   e.stopPropagation();
   if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage('back');
@@ -347,6 +458,8 @@ document.addEventListener('keydown',function(e){
 
 export default function PlayerScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const userId = user?.id;
   const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime } =
     useLocalSearchParams<{
       url: string;
@@ -364,12 +477,19 @@ export default function PlayerScreen() {
   useEffect(() => {
     // Orientation already locked to LANDSCAPE before navigating here.
     // Only need to unlock when leaving.
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+      NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
+    }
     return () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const SO = require('expo-screen-orientation');
         SO.lockAsync(SO.OrientationLock.PORTRAIT_UP).catch(() => {});
       } catch (_) {}
+      if (Platform.OS === 'android') {
+        NavigationBar.setVisibilityAsync('visible').catch(() => {});
+      }
     };
   }, []);
 
@@ -405,15 +525,15 @@ export default function PlayerScreen() {
             serverLabel: safeServerLabel,
             time: msg.time,
             duration: msg.duration,
-          }).catch(() => {});
+          }, userId).catch(() => {});
         }
       } catch {}
     },
-    [safeMovieId, safeMovieSlug, safeTitle, safePoster, safeEpisode, safeServerLabel]
+    [safeMovieId, safeMovieSlug, safeTitle, safePoster, safeEpisode, safeServerLabel, userId]
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
+    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]}>
       <StatusBar hidden />
       <WebView
         ref={webViewRef}
