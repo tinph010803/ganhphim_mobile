@@ -7,6 +7,8 @@ import { Colors } from '@/constants/colors';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { getHomeMovies } from '@/lib/ophim';
+import * as NavigationBar from 'expo-navigation-bar';
+import { Platform } from 'react-native';
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -14,6 +16,11 @@ export default function RootLayout() {
   useEffect(() => {
     // Warm cache in background
     getHomeMovies().catch(() => {});
+    // Set Android navigation bar color
+    if (Platform.OS === 'android') {
+      NavigationBar.setBackgroundColorAsync('#101E53').catch(() => {});
+      NavigationBar.setButtonStyleAsync('light').catch(() => {});
+    }
   }, []);
 
   return (
