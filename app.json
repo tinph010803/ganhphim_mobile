@@ -28,8 +28,7 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-web-browser",
-      "expo-navigation-bar"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
