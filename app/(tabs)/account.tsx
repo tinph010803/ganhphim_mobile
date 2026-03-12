@@ -27,6 +27,7 @@ import {
   FileText,
   Shield,
   LogOut,
+  Star,
 } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
@@ -123,12 +124,17 @@ function AuthModal({
       transparent
       onRequestClose={onClose}
     >
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalKAV}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={styles.modalKAV}
+      >
+        <Pressable style={styles.modalOverlay} onPress={onClose} />
+        <Pressable style={styles.modalSheet} onPress={() => {}}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
             <View style={styles.handleBar} />
 
             <Text style={styles.modalTitle}>
@@ -240,9 +246,9 @@ function AuthModal({
                 ? <ActivityIndicator color={Colors.black} />
                 : <Text style={styles.submitBtnText}>{isRegister ? 'Đăng ký' : 'Đăng nhập'}</Text>}
             </TouchableOpacity>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
+          </ScrollView>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -344,6 +350,21 @@ export default function AccountScreen() {
               </TouchableOpacity>
             );
           })}
+
+          {/* Menu dành riêng cho Admin */}
+          {user?.role === 'admin' && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              activeOpacity={0.7}
+              onPress={() => router.push('/admin/featured' as any)}
+            >
+              <View style={styles.menuItemLeft}>
+                <Star size={18} color="#f59e0b" />
+                <Text style={[styles.menuItemText, { color: '#f59e0b' }]}>Top Phim</Text>
+              </View>
+              <ChevronRight size={16} color="#f59e0b" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {user && (
@@ -442,11 +463,10 @@ const styles = StyleSheet.create({
 
   /* modal */
   modalOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
   },
-  modalKAV: { justifyContent: 'flex-end' },
+  modalKAV: { flex: 1, justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: '#141E40',
     borderTopLeftRadius: 20,

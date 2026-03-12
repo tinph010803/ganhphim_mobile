@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Movie } from '@/types/movie';
 import { Colors } from '@/constants/colors';
@@ -12,15 +12,14 @@ interface MovieCardProps {
 export const MovieCard = memo(function MovieCard({ movie, width = 150 }: MovieCardProps) {
   const router = useRouter();
 
-  const handlePress = () => {
+  const handlePress = useCallback(() => {
     const targetId = movie.slug || movie.id;
     if (!targetId) return;
-
     router.push({
       pathname: '/movie/[id]',
       params: { id: targetId },
     });
-  };
+  }, [movie.slug, movie.id]);
 
   return (
     <TouchableOpacity
@@ -33,6 +32,7 @@ export const MovieCard = memo(function MovieCard({ movie, width = 150 }: MovieCa
           source={{ uri: movie.thumb_url }}
           style={styles.poster}
           resizeMode="cover"
+          fadeDuration={0}
         />
         <View style={styles.episodeBadge}>
           <Text style={styles.episodeText}>

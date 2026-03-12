@@ -14,9 +14,9 @@ import { Calendar, ChevronLeft, PackageOpen } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
 
-const ROPHIM_API = 'https://rophimm.net/baseapi/api/v1';
+const ROPHIM_API = 'https://rophimm.me/baseapi/api/v1';
 const WINDOW_SIZE = 15;
-const DAY_NAMES = ['CN', 'Thu 2', 'Thu 3', 'Thu 4', 'Thu 5', 'Thu 6', 'Thu 7'];
+const DAY_NAMES = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
 function toDateStr(date: Date): string {
   const y = date.getFullYear();
@@ -105,7 +105,7 @@ export default function ScheduleScreen() {
   const renderDateItem = (day: Date, idx: number) => {
     const isSelected = isSameday(day, selectedDay);
     const isToday = isSameday(day, today);
-    const dayName = isToday ? 'Hom nay' : DAY_NAMES[day.getDay()];
+    const dayName = isToday ? 'ôm nay' : DAY_NAMES[day.getDay()];
     const dd = String(day.getDate()).padStart(2, '0');
     const mm = String(day.getMonth() + 1).padStart(2, '0');
     return (
@@ -148,7 +148,7 @@ export default function ScheduleScreen() {
           <ChevronLeft size={24} color={Colors.text} />
         </TouchableOpacity>
         <Calendar size={20} color={Colors.text} />
-        <Text style={styles.headerTitle}>Lich chieu</Text>
+        <Text style={styles.headerTitle}>Lịch chiếu</Text>
       </View>
 
       <View style={styles.dateBarWrapper}>

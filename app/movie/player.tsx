@@ -6,11 +6,16 @@ import { saveWatchProgress } from '@/lib/watchHistory';
 import { useAuth } from '@/context/AuthContext';
 import * as NavigationBar from 'expo-navigation-bar';
 
-function buildPlayerHtml(m3u8Url: string, title: string, episode: string, initialTime = 0): string {
+type _SrvEp = { name: string; link_embed: string; link_m3u8: string };
+type _SrvItem = { name: string; episodes: _SrvEp[] };
+
+function buildPlayerHtml(m3u8Url: string, title: string, episode: string, initialTime = 0, serversData: _SrvItem[] = [], initSrvIdx = 0): string {
   const safeUrl = JSON.stringify(m3u8Url);
   const safeTitle = JSON.stringify(title);
   const safeEpisode = JSON.stringify(episode);
   const safeInitTime = JSON.stringify(initialTime);
+  const safeServersLit = JSON.stringify(serversData);
+  const safeInitSrv = initSrvIdx;
   return `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -92,6 +97,26 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 .sm-opt{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;font-size:14px;color:rgba(255,255,255,.8);cursor:pointer}
 .sm-opt:active{background:rgba(255,255,255,.06)}
 .sm-opt.on{color:#e50914;font-weight:600}
+/* Right panel */
+#rpanel{position:absolute;top:0;right:0;bottom:0;width:62%;background:rgba(15,18,35,.97);transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;z-index:100;border-left:1px solid rgba(255,255,255,.08)}
+#rpanel.open{transform:translateX(0)}
+.rp-head{display:flex;align-items:center;padding:16px 14px 12px;font-size:16px;font-weight:600;color:#fff;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0}
+.rp-title{flex:1}.rp-close{background:none;border:none;color:rgba(255,255,255,.55);width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;cursor:pointer;flex-shrink:0;font-size:18px;padding:0}
+.rp-close:active{background:rgba(255,255,255,.12)}
+.rp-srv-list{overflow-y:auto;flex:1}
+.rp-srv-item{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;font-size:14px;color:rgba(255,255,255,.75);cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)}
+.rp-srv-item:active{background:rgba(255,255,255,.07)}
+.rp-srv-item.on{color:#fff;font-weight:600}
+.rp-ep-top{display:flex;align-items:center;padding:11px 14px;font-size:13px;font-weight:600;color:#fff;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.08);gap:5px;flex-shrink:0;position:relative}
+.rp-ep-top:active{background:rgba(255,255,255,.06)}
+#rp-srv-dd{position:absolute;top:100%;left:0;right:0;background:rgba(18,20,40,.99);z-index:101;display:none;max-height:180px;overflow-y:auto;border-bottom:1px solid rgba(255,255,255,.1)}
+.rp-dd-item{padding:12px 16px;font-size:13px;color:rgba(255,255,255,.75);cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)}
+.rp-dd-item:active{background:rgba(255,255,255,.07)}
+.rp-dd-item.on{color:#e50914;font-weight:600}
+.rp-ep-grid{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-wrap:wrap;gap:7px;align-content:flex-start}
+.ep-btn{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.8);font-size:12px;padding:10px 4px;border-radius:6px;cursor:pointer;width:calc(33.33% - 5px);flex:0 0 calc(33.33% - 5px);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ep-btn:active{background:rgba(255,255,255,.2)}
+.ep-btn.epa{background:#e50914;color:#fff;font-weight:700}
 </style>
 </head>
 <body>
@@ -176,6 +201,21 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
       </div>
     </div>
   </div>
+  <div id="rpanel">
+    <div id="rp-server" style="display:flex;flex-direction:column;height:100%">
+      <div class="rp-head"><span class="rp-title">&#194;m thanh</span><button class="rp-close" id="rp-srv-close">&#x2715;</button></div>
+      <div class="rp-srv-list" id="rp-srv-list"></div>
+    </div>
+    <div id="rp-ep" style="display:none;flex-direction:column;height:100%">
+      <div class="rp-head"><span class="rp-title">Danh s&#225;ch t&#7853;p</span><button class="rp-close" id="rp-ep-close">&#x2715;</button></div>
+      <div class="rp-ep-top" id="rp-ep-top">
+        <span id="rp-ep-srv-lbl"></span>
+        <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M7 10l5 5 5-5z"/></svg>
+        <div id="rp-srv-dd"></div>
+      </div>
+      <div class="rp-ep-grid" id="rp-ep-grid"></div>
+    </div>
+  </div>
   <div id="smenu">
     <div id="sm-main"></div>
     <div id="sm-sub" style="display:none"></div>
@@ -216,6 +256,17 @@ var RATIO_LABELS=['T\u1ef7 l\u1ec7','\u0110\u1ea7y m\u00e0n h\u00ecnh','K\u00e9o
 var chk='<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
 var chevR='<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>';
 var backIco='<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>';
+var SERVERS=${safeServersLit},CUR_SRV=${safeInitSrv},CUR_EP=EP;
+var rpanel=document.getElementById('rpanel'),
+  rpServer=document.getElementById('rp-server'),
+  rpEp=document.getElementById('rp-ep'),
+  rpSrvList=document.getElementById('rp-srv-list'),
+  rpEpGrid=document.getElementById('rp-ep-grid'),
+  rpEpSrvLbl=document.getElementById('rp-ep-srv-lbl'),
+  rpSrvDd=document.getElementById('rp-srv-dd'),
+  epDdOpen=false;
+function rpClose(){rpanel.classList.remove('open');rpSrvDd.style.display='none';epDdOpen=false;}
+function epLabel(n){var t=(n||'').trim();return!isNaN(Number(t))&&t!==''&&parseInt(t)>0?'T\u1eadp '+parseInt(t):n;}
 
 function fmt(s){if(!s||isNaN(s))return'0:00';var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=Math.floor(s%60);return h>0?h+':'+p(m)+':'+p(sc):m+':'+p(sc);}
 function p(n){return n<10?'0'+n:''+n;}
@@ -279,9 +330,9 @@ function showCtrl(keep){
   if(locked)return;
   ctrlOn=true;ov.classList.add('show');
   if(hideTimer)clearTimeout(hideTimer);
-  if(!keep)hideTimer=setTimeout(function(){if(!v.paused&&!scrubbing&&!smenu.classList.contains('open'))hideCtrl();},3000);
+  if(!keep)hideTimer=setTimeout(function(){if(!v.paused&&!scrubbing&&!smenu.classList.contains('open')&&!rpanel.classList.contains('open'))hideCtrl();},3000);
 }
-function hideCtrl(){ctrlOn=false;ov.classList.remove('show');smenu.classList.remove('open');}
+function hideCtrl(){ctrlOn=false;ov.classList.remove('show');smenu.classList.remove('open');rpanel.classList.remove('open');rpSrvDd.style.display='none';epDdOpen=false;}
 function toggleCtrl(){if(locked)return;ctrlOn?hideCtrl():showCtrl();}
 showCtrl();
 
@@ -307,6 +358,7 @@ wrap.addEventListener('click',function(e){
   if(locked){
     return;
   }
+  if(rpanel.classList.contains('open')&&!e.target.closest('#rpanel')){rpClose();return;}
   if(e.target.closest('#ov button')||e.target.closest('.c-btn')||e.target.closest('#prog')||e.target.closest('#smenu')||e.target.closest('#btn-skip'))return;
   var x=e.clientX,w=wrap.offsetWidth;
   var side=x<w*.32?'l':x>w*.68?'r':'m';
@@ -370,11 +422,25 @@ document.getElementById('btn-ratio').addEventListener('click',function(e){
   showCtrl();
 });
 
+// Server/audio selector
+document.getElementById('btn-audio').addEventListener('click',function(e){
+  e.stopPropagation();
+  if(!SERVERS||SERVERS.length===0){showCtrl();return;}
+  buildSrvPanel();
+  rpanel.classList.add('open');
+  showCtrl(true);
+});
+
 // Episode list
 document.getElementById('btn-eplist').addEventListener('click',function(e){
   e.stopPropagation();
-  if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'eplist'}));
-  showCtrl();
+  if(!SERVERS||SERVERS.length===0){
+    if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'eplist'}));
+    showCtrl();return;
+  }
+  buildEpPanel();
+  rpanel.classList.add('open');
+  showCtrl(true);
 });
 
 // Next episode
@@ -386,6 +452,101 @@ document.getElementById('btn-next').addEventListener('click',function(e){
 
 // Cast (visual only)
 document.getElementById('btn-cast').addEventListener('click',function(e){e.stopPropagation();showCtrl();});
+
+// Right panel: build functions
+function buildSrvPanel(){
+  rpServer.style.display='flex';rpEp.style.display='none';
+  var html='';
+  SERVERS.forEach(function(s,i){
+    var on=i===CUR_SRV?' on':'';
+    html+='<div class="rp-srv-item'+on+'" data-i="'+i+'">'+s.name+(i===CUR_SRV?chk:'')+'</div>';
+  });
+  rpSrvList.innerHTML=html;
+  rpSrvList.querySelectorAll('.rp-srv-item').forEach(function(el){
+    el.addEventListener('click',function(){
+      var i=parseInt(el.getAttribute('data-i'));
+      if(i===CUR_SRV){rpClose();return;}
+      CUR_SRV=i;
+      var eps=SERVERS[i]?SERVERS[i].episodes:[];
+      var ep=eps[0];
+      if(ep)switchEp(ep.link_m3u8||ep.link_embed,ep.name,i);
+      rpClose();
+    });
+  });
+}
+function buildSrvDd(){
+  var html='';
+  SERVERS.forEach(function(s,i){
+    var on=i===CUR_SRV?' on':'';
+    html+='<div class="rp-dd-item'+on+'" data-i="'+i+'">'+s.name+'</div>';
+  });
+  rpSrvDd.innerHTML=html;
+  rpSrvDd.querySelectorAll('.rp-dd-item').forEach(function(el){
+    el.addEventListener('click',function(e){
+      e.stopPropagation();
+      var i=parseInt(el.getAttribute('data-i'));
+      CUR_SRV=i;
+      rpEpSrvLbl.textContent=SERVERS[i].name;
+      rpSrvDd.style.display='none';epDdOpen=false;
+      buildEpGrid();buildSrvDd();
+    });
+  });
+}
+function buildEpGrid(){
+  var eps=SERVERS[CUR_SRV]?SERVERS[CUR_SRV].episodes:[];
+  var html='';
+  eps.forEach(function(ep){
+    var active=ep.name===CUR_EP?' epa':'';
+    var url=ep.link_m3u8||ep.link_embed;
+    html+='<button class="ep-btn'+active+'" data-url="'+url+'" data-ep="'+ep.name+'">'+epLabel(ep.name)+'</button>';
+  });
+  rpEpGrid.innerHTML=html;
+  rpEpGrid.querySelectorAll('.ep-btn').forEach(function(el){
+    el.addEventListener('click',function(){
+      var u=el.getAttribute('data-url'),ep=el.getAttribute('data-ep');
+      switchEp(u,ep,CUR_SRV);rpClose();
+    });
+  });
+}
+function buildEpPanel(){
+  rpServer.style.display='none';rpEp.style.display='flex';
+  rpEpSrvLbl.textContent=SERVERS[CUR_SRV]?SERVERS[CUR_SRV].name:'';
+  buildEpGrid();buildSrvDd();
+}
+document.getElementById('rp-ep-top').addEventListener('click',function(e){
+  e.stopPropagation();
+  epDdOpen=!epDdOpen;
+  rpSrvDd.style.display=epDdOpen?'block':'none';
+});
+document.getElementById('rp-srv-close').addEventListener('click',function(e){e.stopPropagation();rpClose();showCtrl();});
+document.getElementById('rp-ep-close').addEventListener('click',function(e){e.stopPropagation();rpClose();showCtrl();});
+function switchEp(url,epName,srvIdx){
+  CUR_EP=epName;
+  if(srvIdx!==undefined&&srvIdx!==null)CUR_SRV=srvIdx;
+  M=url;
+  if(hls){hls.destroy();hls=null;}
+  spin.classList.add('show');
+  if(typeof Hls!=='undefined'&&Hls.isSupported()){
+    hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,enableWorker:false,xhrSetup:function(xhr){xhr.withCredentials=false;}});
+    hls.loadSource(url);hls.attachMedia(v);
+    hls.on(Hls.Events.MANIFEST_PARSED,function(e,d){
+      quals=d.levels.map(function(l,i){return{id:i,label:l.height?l.height+'p':'Level '+i};});
+      curQ=-1;buildSmMain();v.play().catch(function(){});
+    });
+    hls.on(Hls.Events.ERROR,function(ev,d){
+      if(d.fatal){
+        if(d.type===Hls.ErrorTypes.NETWORK_ERROR)setTimeout(function(){if(hls)hls.startLoad();},1500);
+        else if(d.type===Hls.ErrorTypes.MEDIA_ERROR){if(hls)hls.recoverMediaError();}
+      }
+    });
+  }else if(v.canPlayType('application/vnd.apple.mpegurl')){
+    v.src=url;v.play().catch(function(){});
+  }
+  var srvName=SERVERS[CUR_SRV]?SERVERS[CUR_SRV].name:'';
+  var dispEp=epLabel(epName);
+  document.getElementById('top-title').textContent=TT+(dispEp?' | '+dispEp:'');
+  if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'episodeChange',episode:epName,serverLabel:srvName,url:url}));
+}
 
 // Settings
 function buildSmMain(){
@@ -452,7 +613,7 @@ export default function PlayerScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id;
-  const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime } =
+  const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime, servers } =
     useLocalSearchParams<{
       url: string;
       title: string;
@@ -462,6 +623,7 @@ export default function PlayerScreen() {
       serverLabel?: string;
       poster?: string;
       initialTime?: string;
+      servers?: string;
     }>();
   const webViewRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
@@ -496,7 +658,16 @@ export default function PlayerScreen() {
     Array.isArray(initialTime) ? initialTime[0] : (initialTime ?? '0')
   ) || 0;
 
-  const htmlContent = buildPlayerHtml(safeUrl, safeTitle, safeEpisode, safeInitialTime);
+  const safeServersData = (() => {
+    const raw = Array.isArray(servers) ? servers[0] : (servers ?? '[]');
+    try { return JSON.parse(raw) as _SrvItem[]; } catch { return [] as _SrvItem[]; }
+  })();
+  const safeSrvIdx = safeServersData.findIndex((s) => s.name === safeServerLabel);
+
+  const htmlContent = buildPlayerHtml(safeUrl, safeTitle, safeEpisode, safeInitialTime, safeServersData, safeSrvIdx >= 0 ? safeSrvIdx : 0);
+
+  const currentEpisodeRef = useRef(safeEpisode);
+  const currentServerRef = useRef(safeServerLabel);
 
   const handleMessage = useCallback(
     (event: any) => {
@@ -507,21 +678,24 @@ export default function PlayerScreen() {
       }
       try {
         const msg = JSON.parse(data);
-        if (msg.type === 'progress' && safeMovieId && safeMovieSlug) {
+        if (msg.type === 'episodeChange') {
+          if (msg.episode) currentEpisodeRef.current = msg.episode;
+          if (msg.serverLabel) currentServerRef.current = msg.serverLabel;
+        } else if (msg.type === 'progress' && safeMovieId && safeMovieSlug) {
           saveWatchProgress({
             movieId: safeMovieId,
             movieSlug: safeMovieSlug,
             movieTitle: safeTitle,
             posterUrl: safePoster,
-            episodeName: safeEpisode,
-            serverLabel: safeServerLabel,
+            episodeName: currentEpisodeRef.current,
+            serverLabel: currentServerRef.current,
             time: msg.time,
             duration: msg.duration,
           }, userId).catch(() => {});
         }
       } catch {}
     },
-    [safeMovieId, safeMovieSlug, safeTitle, safePoster, safeEpisode, safeServerLabel, userId]
+    [safeMovieId, safeMovieSlug, safeTitle, safePoster, userId]
   );
 
   return (

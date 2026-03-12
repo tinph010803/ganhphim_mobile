@@ -42,11 +42,9 @@ export default function WatchHistoryScreen() {
   }
 
   function handleRemove(item: WatchHistoryEntry) {
-    removeWatchEntry(item.movieId, item.episodeName, userId);
+    removeWatchEntry(item.movieSlug, item.episodeName, userId);
     setHistory((prev) =>
-      prev.filter(
-        (e) => !(e.movieId === item.movieId && e.episodeName === item.episodeName)
-      )
+      prev.filter((e) => e.movieSlug !== item.movieSlug)
     );
   }
 

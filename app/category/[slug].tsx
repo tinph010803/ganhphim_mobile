@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   ActivityIndicator, Dimensions, ScrollView, Modal, Pressable,
@@ -8,7 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, SlidersHorizontal, X, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { GENRES, COUNTRIES, MOVIE_TYPES, SORT_OPTIONS, YEARS } from '@/constants/filters';
-import { getMoviesFilteredPaged } from '@/lib/ophim';
+import { getMoviesFilteredPaged, searchMoviesWithFilters } from '@/lib/ophim';
 import { Movie } from '@/types/movie';
 import { MovieCard } from '@/components/MovieCard';
 
@@ -194,9 +194,15 @@ function FilterModal({
 // ─── Category Screen ───────────────────────────────────────────────────────────
 export default function CategoryScreen() {
   const router = useRouter();
-  const { slug, title, type, sort: sortParam } = useLocalSearchParams<{
-    slug: string; title: string; type: string; sort?: string;
+  const { slug, title, type, sort: sortParam, filter: filterParam } = useLocalSearchParams<{
+    slug: string; title: string; type: string; sort?: string; filter?: string;
   }>();
+
+  // Topic filter mode: when a filter JSON is passed from topic cards
+  const topicFilter = useMemo(() => {
+    if (!filterParam) return null;
+    try { return JSON.parse(filterParam) as Record<string, string>; } catch { return null; }
+  }, [filterParam]);
 
   const initialFilter = initFilter(slug ?? '', type ?? 'country', sortParam);
 
@@ -212,21 +218,34 @@ export default function CategoryScreen() {
   const fetchMovies = useCallback(async (f: FilterState, pageNum: number) => {
     setLoading(true);
     try {
-      const result = await getMoviesFilteredPaged({
-        movieType: f.movieType || undefined,
-        country: f.country || undefined,
-        genre: f.genre || undefined,
-        year: f.year,
-        sort: f.sort || undefined,
-      }, pageNum);
-      setMovies(result.movies);
-      setTotalPages(result.totalPages);
+      if (topicFilter) {
+        // Topic mode: use searchMoviesWithFilters with topic's filter fields
+        const movies = await searchMoviesWithFilters({
+          keyword: topicFilter.q,
+          country: topicFilter.country_code,
+          genre: topicFilter.genre_ids,
+          type: topicFilter.type,
+          sort: topicFilter.sort_by,
+        });
+        setMovies(movies);
+        setTotalPages(1);
+      } else {
+        const result = await getMoviesFilteredPaged({
+          movieType: f.movieType || undefined,
+          country: f.country || undefined,
+          genre: f.genre || undefined,
+          year: f.year,
+          sort: f.sort || undefined,
+        }, pageNum);
+        setMovies(result.movies);
+        setTotalPages(result.totalPages);
+      }
     } catch {
       setMovies([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [topicFilter]);
 
   useEffect(() => { setPage(1); fetchMovies(filter, 1); }, [filter, fetchMovies]);
 

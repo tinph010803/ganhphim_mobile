@@ -1,294 +1,429 @@
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
   Dimensions,
-  FlatList,
   TouchableOpacity,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
-  ListRenderItemInfo,
+  Animated,
+  ScrollView,
 } from 'react-native';
 import { Movie } from '@/types/movie';
-import { Colors } from '@/constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Play, Info } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { getMovieBySlug } from '@/lib/ophim';
+import {
+  FeaturedOverride,
+  loadFeaturedOverrides,
+  overridesToRecord,
+} from '@/lib/featuredOverrides';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = Math.min(SCREEN_WIDTH * 0.58, 260);
-const CARD_GAP = 12;
-const SNAP_SIZE = CARD_WIDTH + CARD_GAP;
-const SIDE_PADDING = (SCREEN_WIDTH - CARD_WIDTH) / 2;
+const { width: W, height: SCREEN_H } = Dimensions.get('window');
+const BANNER_H = Math.round(Math.min(W * 0.60, SCREEN_H * 0.42));
+const EMPTY_OV: Omit<FeaturedOverride, 'slug'> = {};
 
-interface FeaturedCarouselProps {
-  movies: Movie[];
-}
-
-export const FeaturedCarousel = memo(function FeaturedCarousel({ movies }: FeaturedCarouselProps) {
-  const activeIndexRef = useRef(0);
-  const [activeIndex, setActiveIndex] = useState(0);
+const BannerSlide = memo(function BannerSlide({
+  movie,
+  active,
+  ov,
+}: {
+  movie: Movie;
+  active: boolean;
+  ov: Omit<FeaturedOverride, 'slug'>;
+}) {
   const router = useRouter();
+  const slug = movie.slug || movie.id;
 
-  const openMovieDetail = useCallback((movie: Movie) => {
-    const targetId = movie.slug || movie.id;
-    if (!targetId) return;
-    router.push({ pathname: '/movie/[id]', params: { id: targetId } });
-  }, [router]);
+  const bgScale = useRef(new Animated.Value(1)).current;
+  const charX = useRef(new Animated.Value(50)).current;
+  const charO = useRef(new Animated.Value(0)).current;
+  const titleO = useRef(new Animated.Value(0)).current;
+  const titleY = useRef(new Animated.Value(10)).current;
 
-  const handleMomentumScrollEnd = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const contentOffsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.max(0, Math.min(movies.length - 1, Math.round(contentOffsetX / SNAP_SIZE)));
-    if (index !== activeIndexRef.current) {
-      activeIndexRef.current = index;
-      setActiveIndex(index);
+  useEffect(() => {
+    if (!active) {
+      // Reset animations when not active
+      bgScale.setValue(1);
+      charX.setValue(50);
+      charO.setValue(0);
+      titleO.setValue(0);
+      titleY.setValue(10);
+      return;
     }
-  }, [movies.length]);
 
-  const keyExtractor = useCallback((item: Movie) => item.id, []);
+    Animated.timing(bgScale, {
+      toValue: 1.05,
+      duration: 3500,
+      useNativeDriver: true,
+    }).start();
 
-  const renderItem = useCallback(({ item, index }: ListRenderItemInfo<Movie>) => (
-    <View style={[styles.slide, index === movies.length - 1 && styles.lastSlide]}>
-      <LinearGradient
-        colors={['rgba(255,35,25,0.45)', 'rgba(255,35,25,0.06)', 'transparent']}
-        style={styles.posterGlow}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      />
-      <Image
-        source={{ uri: item.poster_url }}
-        style={styles.poster}
-        resizeMode="cover"
-      />
-    </View>
-  ), [movies.length]);
+    Animated.parallel([
+      Animated.timing(charX, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(charO, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
 
-  const renderDots = useCallback(() => (
-    <View style={styles.dotsContainer}>
-      {movies.map((_, index) => (
-        <View
-          key={index}
-          style={[styles.dot, index === activeIndex && styles.activeDot]}
-        />
-      ))}
-    </View>
-  ), [movies, activeIndex]);
+    Animated.parallel([
+      Animated.timing(titleO, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(titleY, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [active]);
 
-  if (movies.length === 0) return null;
-
-  const featuredMovie = movies[activeIndex];
+  const bgUri = ov.bg || movie.thumb_url || movie.poster_url;
+  const charUri = ov.character;
+  const titleUri = ov.titleImg;
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        horizontal
-        data={movies}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        snapToInterval={SNAP_SIZE}
-        decelerationRate="fast"
-        removeClippedSubviews
-        scrollEventThrottle={16}
-        contentContainerStyle={styles.scrollContent}
-        initialNumToRender={3}
-        maxToRenderPerBatch={3}
-        windowSize={3}
+    <TouchableOpacity
+      activeOpacity={0.95}
+      style={styles.slide}
+      onPress={() =>
+        router.push({ pathname: '/movie/[id]', params: { id: slug } })
+      }
+    >
+      <Animated.View style={[styles.bg, { transform: [{ scale: bgScale }] }]}>
+        <Animated.Image
+          source={{ uri: bgUri }}
+          style={{ width: W, height: BANNER_H }}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
+      </Animated.View>
+
+      {/* Bottom Gradient — subtle fade only */}
+      <LinearGradient
+        colors={[
+          'transparent',
+          'rgba(0,0,0,0.35)',
+          'rgba(0,0,0,0.65)',
+        ]}
+        locations={[0, 0.65, 1]}
+        style={styles.gradBottom}
       />
 
-      <View style={styles.infoContainer}>
-        <Text style={styles.title} numberOfLines={2}>
-          {featuredMovie.title}
-        </Text>
-        <Text style={styles.subtitle}>{featuredMovie.title_en}</Text>
+      {/* Top Gradient — subtle dark vignette */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.5)', 'transparent']}
+        style={styles.gradTop}
+      />
 
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.button, styles.primaryButton]}
-            onPress={() => openMovieDetail(featuredMovie)}
-            activeOpacity={0.8}
+      {/* Left Gradient — pushes darkness left so text is readable */}
+      <LinearGradient
+        colors={[
+          'rgba(0,0,0,0.85)',
+          'rgba(0,0,0,0.55)',
+          'rgba(0,0,0,0.15)',
+          'transparent',
+        ]}
+        locations={[0, 0.35, 0.65, 1]}
+        style={styles.gradLeft}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+      />
+
+      {charUri && (
+        <Animated.View
+          style={[
+            styles.character,
+            {
+              width: W * (ov.charW ?? 0.60),
+              height: BANNER_H * (ov.charH ?? 1.1),
+              right: ov.charRight ?? -10,
+              bottom: ov.charBottom ?? 0,
+              opacity: charO,
+              transform: [{ translateX: charX }],
+            },
+          ]}
+        >
+          <Animated.Image
+            source={{ uri: charUri }}
+            style={StyleSheet.absoluteFill as any}
+            resizeMode="contain"
+            fadeDuration={0}
+          />
+        </Animated.View>
+      )}
+
+      {/* Content — left side overlay */}
+      <View style={styles.content}>
+        {/* Title image or fallback text */}
+        {titleUri ? (
+          <Animated.Image
+            source={{ uri: titleUri }}
+            style={[
+              styles.titleImg,
+              { opacity: titleO, transform: [{ translateY: titleY }] },
+            ]}
+            resizeMode="contain"
+          />
+        ) : (
+          <Animated.Text
+            style={[
+              styles.titleText,
+              { opacity: titleO, transform: [{ translateY: titleY }] },
+            ]}
           >
-            <Play size={16} color="#07113A" fill="#07113A" />
-            <Text style={styles.primaryButtonText}>Xem Phim</Text>
-          </TouchableOpacity>
+            {movie.title}
+          </Animated.Text>
+        )}
 
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={() => openMovieDetail(featuredMovie)}
-            activeOpacity={0.8}
-          >
-            <Info size={16} color="#07113A" />
-            <Text style={styles.secondaryButtonText}>Thông tin</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.badges}>
-          {featuredMovie.imdb_rating > 0 && (
-            <View style={[styles.badge, styles.imdbBadge]}>
-              <Text style={[styles.badgeText, styles.imdbBadgeText]}>
-                IMDb {featuredMovie.imdb_rating.toFixed(1)}
-              </Text>
-            </View>
-          )}
-          {featuredMovie.age_rating && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{featuredMovie.age_rating}</Text>
-            </View>
-          )}
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{featuredMovie.year}</Text>
+        {/* TOP 10 badge + meta info */}
+        <View style={styles.badgeRow}>
+          <View style={styles.top10Badge}>
+            <Text style={styles.top10Text}>TOP 10</Text>
           </View>
-          {featuredMovie.is_series && featuredMovie.current_episode > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>Tập {featuredMovie.current_episode}</Text>
-            </View>
-          )}
+
+          <Text style={styles.badgeMeta}>
+            {[movie.year, movie.country, `Tập ${movie.current_episode}`]
+              .filter(Boolean)
+              .join('  |  ')}
+          </Text>
         </View>
 
-        <Text style={styles.description} numberOfLines={3}>
-          {featuredMovie.description}
-        </Text>
-      </View>
+        {/* Genre tags */}
+        <View style={styles.genreRow}>
+          {movie.genres?.slice(0, 3).map((g) => (
+            <View key={g} style={styles.genreTag}>
+              <Text style={styles.genreText}>{g}</Text>
+            </View>
+          ))}
+        </View>
 
-      {renderDots()}
+
+      </View>
+    </TouchableOpacity>
+  );
+}, (prev, next) => prev.active === next.active && prev.movie === next.movie && prev.ov === next.ov);
+
+export const FeaturedCarousel = memo(function FeaturedCarousel() {
+  const [featured, setFeatured] = useState<Movie[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [overridesMap, setOverridesMap] = useState<
+    Record<string, Omit<FeaturedOverride, 'slug'>>
+  >({});
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    loadFeaturedOverrides().then((list) => {
+      const map = overridesToRecord(list);
+      setOverridesMap(map);
+      const slugs = list.map((o) => o.slug);
+      Promise.all(slugs.map((slug) => getMovieBySlug(slug))).then((res) => {
+        setFeatured(res.filter(Boolean) as Movie[]);
+      });
+    });
+  }, []);
+
+  const handleScroll = useCallback((e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / W);
+    setActiveIndex(idx);
+  }, []);
+
+  if (featured.length === 0) return null;
+
+  return (
+    <View style={[styles.container, { height: BANNER_H }]}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScroll}
+        scrollEventThrottle={16}
+        decelerationRate="fast"
+        disableIntervalMomentum
+        bounces={false}
+      >
+        {featured.map((item, index) => (
+          <BannerSlide
+            key={item.id}
+            movie={item}
+            active={index === activeIndex}
+            ov={overridesMap[item.slug || item.id] ?? EMPTY_OV}
+          />
+        ))}
+      </ScrollView>
+
+      {/* Dot indicators — bottom right, inside banner */}
+      <View style={styles.dots} pointerEvents="none">
+        {featured.map((_, i) => (
+          <View
+            key={i}
+            style={[styles.dot, i === activeIndex && styles.dotActive]}
+          />
+        ))}
+      </View>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 0,
+    overflow: 'hidden',
   },
-  scrollContent: {
-    paddingHorizontal: SIDE_PADDING,
-  },
+
   slide: {
-    width: CARD_WIDTH,
-    marginRight: CARD_GAP,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: CARD_WIDTH * 1.42,
+    width: W,
+    height: BANNER_H,
+    overflow: 'hidden',
+    backgroundColor: '#1a1a2e',
   },
-  lastSlide: {
-    marginRight: 0,
+
+  bg: {
+    ...StyleSheet.absoluteFillObject,
   },
-  posterGlow: {
+
+  /* Bottom gradient — only covers bottom 50% to avoid dark band */
+  gradBottom: {
     position: 'absolute',
-    width: CARD_WIDTH * 0.96,
-    height: CARD_WIDTH * 1.32,
-    borderRadius: 30,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: BANNER_H * 0.55,
+  },
+
+  /* Top vignette ~18% height */
+  gradTop: {
+    position: 'absolute',
     top: 0,
-    zIndex: 1,
+    left: 0,
+    right: 0,
+    height: BANNER_H * 0.18,
   },
-  poster: {
-    zIndex: 2,
-    width: CARD_WIDTH,
-    aspectRatio: 2 / 3,
-    borderRadius: 18,
-    backgroundColor: Colors.cardBackground,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.9)',
+
+  /* Left gradient ~55% width */
+  gradLeft: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: W * 0.58,
   },
-  infoContainer: {
-    paddingHorizontal: 16,
-    marginTop: 8,
-    alignItems: 'center',
+
+  /* Character: right side, fits within banner */
+  character: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: W * 0.58,
+    height: BANNER_H,
   },
-  title: {
-    color: Colors.text,
-    fontSize: 19,
-    fontWeight: '800',
-    textAlign: 'center',
+
+
+  /* Left-anchored content block */
+  content: {
+    position: 'absolute',
+    left: 20,
+    bottom: 14,
+    right: W * 0.40,
   },
-  subtitle: {
-    color: Colors.textSecondary,
-    fontSize: 13,
-    marginTop: 3,
-    textAlign: 'center',
+
+  titleImg: {
+    width: '100%',
+    height: 72,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
   },
-  buttonContainer: {
+
+  titleText: {
+    color: '#fff',
+    fontSize: 26,
+    fontWeight: '900',
+    marginBottom: 10,
+    lineHeight: 30,
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+
+  badgeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    marginTop: 12,
+    marginBottom: 8,
   },
-  button: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 7,
+
+  top10Badge: {
+    backgroundColor: '#22C55E',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  primaryButton: {
-    backgroundColor: '#A1F8DE',
+
+  top10Text: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
-  secondaryButton: {
-    backgroundColor: '#FFFFFF',
+
+  badgeMeta: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '500',
   },
-  primaryButtonText: {
-    color: '#07113A',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  secondaryButtonText: {
-    color: '#07113A',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  badges: {
+
+  genreRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
-    marginTop: 10,
-    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 10,
   },
-  badge: {
-    backgroundColor: 'rgba(15, 22, 70, 0.88)',
+
+  genreTag: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 10,
+    borderColor: 'rgba(255,255,255,0.55)',
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
-  imdbBadge: {
-    backgroundColor: '#F5C518',
-    borderColor: '#F5C518',
+
+  genreText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '500',
   },
-  badgeText: {
-    color: Colors.text,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  imdbBadgeText: {
-    color: '#1A1A1A',
-  },
-  description: {
-    color: '#D0D8F2',
-    fontSize: 13,
-    lineHeight: 21,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  dotsContainer: {
+
+
+
+  /* Dot indicators — bottom-right corner */
+  dots: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 7,
-    marginTop: 10,
+    gap: 4,
   },
+
   dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    backgroundColor: 'rgba(201, 208, 235, 0.35)',
+    width: 6,
+    height: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  activeDot: {
-    width: 26,
-    backgroundColor: Colors.white,
+
+  dotActive: {
+    width: 22,
+    height: 5,
+    backgroundColor: '#22C55E',
+    borderRadius: 10,
   },
 });

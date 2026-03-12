@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   View,
@@ -16,21 +16,108 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import { GENRES } from '@/constants/filters';
 import { getHomeMovies, getMoviesByCountry, getMoviesByType } from '@/lib/ophim';
+import { getTop10Films } from '@/lib/top10Films';
 import { Movie } from '@/types/movie';
 import { FeaturedCarousel } from '@/components/FeaturedCarousel';
 import { MovieSection } from '@/components/MovieSection';
-import { Bell, ChevronDown, ChevronRight, Settings, X } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { Bell, ChevronDown, Settings, X, Play } from 'lucide-react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { getWatchHistory, WatchHistoryEntry, formatTime } from '@/lib/watchHistory';
+import { useAuth } from '@/context/AuthContext';
 
-const FILTER_OPTIONS = ['Đề xuất', 'Phim bộ', 'Phim lẻ', 'Thể loại'];
+const TOPICS_PREVIEW = 4;
 
-const INTEREST_CATEGORIES = [
-  { id: '1', title: 'Marvel Studios', color: '#CC1A1A', secondColor: '#8B0000' },
-  { id: '2', title: 'Thuyết Minh Tuổi Thơ', color: '#1A56DB', secondColor: '#0D3B9E' },
-  { id: '3', title: 'Hoạt Hình', color: '#7E3AF2', secondColor: '#5521B5' },
-  { id: '4', title: 'Phim Hành Động', color: '#E3780B', secondColor: '#A85200' },
-  { id: '5', title: 'Tâm Lý Tình Cảm', color: '#0D7C6A', secondColor: '#075449' },
+const TOP10_CARD_WIDTH = 110;
+const TOP10_CARD_MARGIN = 10;
+const TOP10_ITEM_SIZE = TOP10_CARD_WIDTH + TOP10_CARD_MARGIN;
+const TOP10_LIST_PADDING = 16;
+
+const Top10Card = memo(function Top10Card({ item, index }: { item: Movie; index: number }) {
+  const router = useRouter();
+  const handlePress = useCallback(() => {
+    const id = item.slug || item.id;
+    if (id) router.push({ pathname: '/movie/[id]', params: { id } });
+  }, [item.slug, item.id]);
+  return (
+    <TouchableOpacity
+      style={styles.top10Card}
+      activeOpacity={0.75}
+      onPress={handlePress}
+    >
+      <View style={styles.top10ImageWrap}>
+        <Image source={{ uri: item.thumb_url }} style={styles.top10Poster} resizeMode="cover" fadeDuration={0} />
+        <View style={styles.top10RankWrap}>
+          <Text style={styles.top10Rank}>{index + 1}</Text>
+        </View>
+        <View style={styles.episodeBadgeSmall}>
+          <Text style={styles.episodeBadgeSmallText}>PĐ.{item.current_episode}</Text>
+        </View>
+      </View>
+      <Text style={styles.top10Title} numberOfLines={2}>{item.title}</Text>
+      <Text style={styles.top10TitleEn} numberOfLines={1}>{item.title_en}</Text>
+    </TouchableOpacity>
+  );
+});
+
+const FILTER_OPTIONS   = ['Đề xuất', 'Phim bộ', 'Phim lẻ', 'Thể loại'];
+
+const TOPICS = [
+  { slug: 'hot-ran-ran', name: 'Hot Rần Rần', color: '#e23341', thumbnail: 'https://img.upanhnhanh.com/09135e97e7ae94ff1d45780b7e22941f', filter: { sort_by: 'views', status: 'ongoing' } },
+  { slug: 'dang-chieu-phat', name: 'Đang Chiếu Phát', color: '#b5420a', thumbnail: 'https://img.upanhnhanh.com/5ac700506a3109f17a7b61a7cccf1ee4', filter: { status: 'ongoing' } },
+  { slug: 'phim-truyen-hinh-trung-quoc-dai-luc', name: 'Trung Quốc', color: '#1a6b3a', thumbnail: 'https://img.upanhnhanh.com/817f1f6835167655bf1d6eb73e842a25', filter: { country_code: 'trung-quoc', type: 'phim-bo' } },
+  { slug: 'hoat-hinh-chon-loc', name: 'Hoạt hình', color: '#1a3a6b', thumbnail: 'https://img.upanhnhanh.com/a710824cb68eb5bd5b14bee9696d931e', filter: { q: 'hoạt hình' } },
+  { slug: 'phim-hanh-dong', name: 'Hành Động', color: '#8b1a1a', thumbnail: 'https://img.upanhnhanh.com/f5f8ff6d550da4ee7f2f469b6b3d3e4c', filter: { genre_ids: 'hanh-dong', sort_by: 'release_date' } },
+  { slug: 'phim-co-trang', name: 'Cổ Trang', color: '#4a2a0a', thumbnail: 'https://img.upanhnhanh.com/4c13333b13dbf51be35002a08b224074', filter: { genre_ids: 'co-trang', sort_by: 'release_date' } },
+  { slug: 'phim-han-quoc', name: 'Hàn Quốc', color: '#1a2a5c', thumbnail: 'https://img.upanhnhanh.com/94571cba98cfe7b5468d2d99e213bb97', filter: { country_code: 'han-quoc' } },
+  { slug: 'thanh-xuan', name: 'Thanh xuân', color: '#0a2a4a', thumbnail: 'https://img.upanhnhanh.com/88ef66d9554f495fe0a08bd866bb5478', filter: { q: 'thanh xuân' } },
+  { slug: 'chua-lanh-tam-hon', name: 'Chữa Lành', color: '#5c1a1a', thumbnail: 'https://img.upanhnhanh.com/8c1e760e0826ba62a8f10f1c271ebbbb', filter: { q: 'chữa lành' } },
+  { slug: 'phim-tinh-cam', name: 'Tình Cảm', color: '#6b1a3a', thumbnail: 'https://img.upanhnhanh.com/9fedf0d5f28b369268d7819d8dc1d865', filter: { genre_ids: 'tinh-cam', sort_by: 'release_date' } },
+  { slug: 'phim-4k', name: 'Phim 4K', color: '#1a1a1a', thumbnail: 'https://img.upanhnhanh.com/15fa15c1a85b68866f059dab9b0dfde5', filter: { quality: '4K' } },
+  { slug: 'phim-cong-so', name: 'Công Sở', color: '#0a1a2a', thumbnail: 'https://img.upanhnhanh.com/6d8a2fc03f1fc1c612a0f1ea53c54304', filter: { q: 'công sở' } },
+  { slug: 'phim-hinh-su', name: 'Hình Sự', color: '#0a1a3a', thumbnail: 'https://img.upanhnhanh.com/1cde1f9801b281f6303b968f77d7d7c4', filter: { genre_ids: 'hinh-su', sort_by: 'release_date' } },
+  { slug: 'phim-kinh-di', name: 'Kinh Dị', color: '#1a0a2a', thumbnail: 'https://img.upanhnhanh.com/83d50a21caa01e0390ed16808e135515', filter: { genre_ids: 'kinh-di', sort_by: 'release_date' } },
+  { slug: 'dien-anh-au-my', name: 'Điện ảnh Âu Mỹ', color: '#5c1a1a', thumbnail: 'https://img.upanhnhanh.com/d4590ecd4dfd717a3a91d9614e51d1c7', filter: { country_code: 'au-my', type: 'phim-le' } },
 ];
+
+const TopicCard = memo(function TopicCard({ topic }: { topic: typeof TOPICS[number] }) {
+  const router = useRouter();
+  const handlePress = useCallback(() => {
+    router.push({
+      pathname: '/category/[slug]',
+      params: { slug: topic.slug, title: topic.name, filter: JSON.stringify(topic.filter) },
+    });
+  }, [router, topic]);
+  return (
+    <TouchableOpacity style={[styles.topicCard, { backgroundColor: topic.color }]} activeOpacity={0.82} onPress={handlePress}>
+      {/* tc-thumb: ảnh bên phải */}
+      <Image
+        source={{ uri: topic.thumbnail }}
+        style={styles.topicThumb}
+        resizeMode="cover"
+        fadeDuration={0}
+      />
+      {/* tc-overlay: màu chủ đạo che trái, gradient mờ dần sang phải */}
+      <LinearGradient
+        colors={[topic.color, `${topic.color}cc`, `${topic.color}00`]}
+        locations={[0, 0.35, 0.62]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.topicOverlay}
+      />
+      {/* tc-glow: ánh sáng dưới */}
+      <LinearGradient
+        colors={['transparent', `${topic.color}cc`]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.topicGlow}
+      />
+      {/* tc-body: tên chủ đề */}
+      <View style={styles.topicBody}>
+        <Text style={styles.topicTitle} numberOfLines={2}>{topic.name}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 type SectionConfig = {
   key: string;
@@ -49,6 +136,7 @@ const SECTION_CONFIGS: SectionConfig[] = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [selectedFilter, setSelectedFilter] = useState('Đề xuất');
   const [featuredMovies, setFeaturedMovies] = useState<Movie[]>([]);
   const [top10Movies, setTop10Movies] = useState<Movie[]>([]);
@@ -56,18 +144,26 @@ export default function HomeScreen() {
   const [genreModalVisible, setGenreModalVisible] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [genreSort, setGenreSort] = useState<'moi-nhat' | 'xem-nhieu'>('moi-nhat');
+  const [watchHistory, setWatchHistory] = useState<WatchHistoryEntry[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Reload watch history every time screen is focused
+  useFocusEffect(useCallback(() => {
+    if (!user) { setWatchHistory([]); return; }
+    getWatchHistory(user.id).then((items) => setWatchHistory(items.slice(0, 20)));
+  }, [user]));
 
   useEffect(() => {
     (async () => {
       try {
-        const [home, ...sections] = await Promise.all([
+        const [home, top10, ...sections] = await Promise.all([
           getHomeMovies(),
+          getTop10Films(),
           ...SECTION_CONFIGS.map((s) => s.fetchFn()),
         ]);
         setFeaturedMovies(home.slice(0, 8));
-        setTop10Movies(home.slice(0, 10));
+        setTop10Movies(top10.slice(0, 10));
         const movies: Record<string, Movie[]> = {};
         SECTION_CONFIGS.forEach((s, i) => { movies[s.key] = sections[i].slice(0, 12); });
         setSectionMovies(movies);
@@ -135,64 +231,112 @@ export default function HomeScreen() {
     } as any);
   }, [selectedGenres, genreSort, router]);
 
-  const renderTop10Card = useCallback(({ item, index }: { item: Movie; index: number }) => (
-    <TouchableOpacity
-      style={styles.top10Card}
-      activeOpacity={0.75}
-      onPress={() => {
-        const id = item.slug || item.id;
-        if (id) router.push({ pathname: '/movie/[id]', params: { id } });
-      }}
-    >
-      <View style={styles.top10ImageWrap}>
-        <Image source={{ uri: item.thumb_url }} style={styles.top10Poster} resizeMode="cover" />
-        <View style={styles.top10RankWrap}>
-          <Text style={styles.top10Rank}>{index + 1}</Text>
+  const renderTop10Card = useCallback(
+    ({ item, index }: { item: Movie; index: number }) => <Top10Card item={item} index={index} />,
+    []
+  );
+
+  const top10GetItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: TOP10_ITEM_SIZE,
+      offset: TOP10_LIST_PADDING + index * TOP10_ITEM_SIZE,
+      index,
+    }),
+    []
+  );
+
+  const renderHistoryCard = useCallback((entry: WatchHistoryEntry) => {
+    const progress = entry.duration > 0 ? Math.min(entry.time / entry.duration, 1) : 0;
+    return (
+      <TouchableOpacity
+        key={entry.movieSlug}
+        style={styles.historyCard}
+        activeOpacity={0.8}
+        onPress={() =>
+          router.push({
+            pathname: '/movie/[id]',
+            params: {
+              id: entry.movieSlug,
+              resumeTime: String(entry.time),
+              resumeEpisode: entry.episodeName,
+              resumeServer: entry.serverLabel,
+            },
+          } as any)
+        }
+      >
+        <View style={styles.historyPosterWrap}>
+          <Image source={{ uri: entry.posterUrl }} style={styles.historyPoster} resizeMode="cover" />
+          <View style={styles.historyPlayOverlay}>
+            <Play size={20} color="#fff" fill="#fff" />
+          </View>
+          {progress > 0 && (
+            <View style={styles.historyProgressBg}>
+              <View style={[styles.historyProgressFill, { width: `${progress * 100}%` }]} />
+            </View>
+          )}
         </View>
-        <View style={styles.episodeBadgeSmall}>
-          <Text style={styles.episodeBadgeSmallText}>PĐ.{item.current_episode}</Text>
-        </View>
-      </View>
-      <Text style={styles.top10Title} numberOfLines={2}>{item.title}</Text>
-      <Text style={styles.top10TitleEn} numberOfLines={1}>{item.title_en}</Text>
-    </TouchableOpacity>
-  ), [router]);
+        <Text style={styles.historyTitle} numberOfLines={2}>{entry.movieTitle}</Text>
+        <Text style={styles.historyEp} numberOfLines={1}>
+          {entry.episodeName ? `Tập ${entry.episodeName}` : 'Tập 1'}
+        </Text>
+        <Text style={styles.historyTime} numberOfLines={1}>
+          {formatTime(entry.time)} / {formatTime(entry.duration)}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [router]);
 
   const listHeader = useMemo(() => (
       <Animated.View style={{ opacity: fadeAnim }}>
-        {featuredMovies.length > 0 && <FeaturedCarousel movies={featuredMovies} />}
-        <View style={styles.sectionContainer}>
+        {<FeaturedCarousel />}
+        <View style={[styles.sectionContainer, { marginTop: 16 }]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Bạn đang quan tâm gì?</Text>
-            <TouchableOpacity activeOpacity={0.7}>
-              <ChevronRight size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScrollContent} nestedScrollEnabled>
-            {INTEREST_CATEGORIES.map((cat) => (
-              <TouchableOpacity key={cat.id} activeOpacity={0.8} style={styles.categoryCard}>
-                <LinearGradient colors={[cat.color, cat.secondColor]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.categoryGradient}>
-                  <Text style={styles.categoryTitle}>{cat.title}</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topicScroll} nestedScrollEnabled>
+            {TOPICS.slice(0, TOPICS_PREVIEW).map((topic) => (
+              <TopicCard key={topic.slug} topic={topic} />
             ))}
+            <TouchableOpacity
+              style={[styles.topicCard, styles.topicSeeAll]}
+              activeOpacity={0.8}
+              onPress={() => router.push('/topics' as any)}
+            >
+              <Text style={styles.topicSeeAllCount}>+{TOPICS.length - TOPICS_PREVIEW}</Text>
+              <Text style={styles.topicSeeAllText}>Xem tất cả</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
+
+        {watchHistory.length > 0 && (
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Tiếp tục xem</Text>
+              <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/watch-history' as any)}>
+                <Text style={styles.seeAllText}>Xem tất cả</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.historyScrollContent} nestedScrollEnabled>
+              {watchHistory.map(renderHistoryCard)}
+            </ScrollView>
+          </View>
+        )}
       </Animated.View>
-  ), [featuredMovies, fadeAnim]);
+  ), [fadeAnim, watchHistory, renderHistoryCard]);
 
   const listFooter = useMemo(() => {
     if (!top10Movies.length) return null;
     return (
       <View style={[styles.sectionContainer, styles.footerPadding]}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Top 10 phim bộ hôm nay</Text>
+          <Text style={styles.sectionTitle}>Top 10 Phậm Lᮧ Hay Nhức Nách</Text>
         </View>
         <FlatList
           horizontal
           data={top10Movies}
           keyExtractor={(item) => item.id}
           renderItem={renderTop10Card}
+          getItemLayout={top10GetItemLayout}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.top10ScrollContent}
           initialNumToRender={4}
@@ -204,7 +348,7 @@ export default function HomeScreen() {
         />
       </View>
     );
-  }, [top10Movies, renderTop10Card]);
+  }, [top10Movies, renderTop10Card, top10GetItemLayout]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -435,28 +579,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
-  // Interest categories
-  categoryScrollContent: {
+  // Topic cards
+  topicScroll: {
     paddingHorizontal: 16,
-    gap: 10,
+    gap: 8,
   },
-  categoryCard: {
-    width: 150,
-    height: 72,
+  topicCard: {
+    width: 160,
+    height: 88,
     borderRadius: 12,
     overflow: 'hidden',
   },
-  categoryGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 10,
+  topicThumb: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: '65%',
   },
-  categoryTitle: {
-    color: Colors.white,
+  topicOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  topicGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 40,
+  },
+  topicBody: {
+    position: 'absolute',
+    left: 12,
+    bottom: 10,
+    right: '55%',
+  },
+  topicTitle: {
+    color: '#fff',
     fontSize: 13,
     fontWeight: '800',
-    textAlign: 'center',
+    lineHeight: 18,
+  },
+  topicSeeAll: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  topicSeeAllCount: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  topicSeeAllText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 12,
+    fontWeight: '600',
   },
   // Top 10
   top10ScrollContent: {
@@ -524,6 +703,68 @@ const styles = StyleSheet.create({
   },
   footerPadding: {
     paddingBottom: 24,
+  },
+  // Watch history
+  historyScrollContent: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  historyCard: {
+    width: 110,
+  },
+  historyPosterWrap: {
+    width: 110,
+    height: 160,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: Colors.cardBackground,
+    position: 'relative',
+  },
+  historyPoster: {
+    width: '100%',
+    height: '100%',
+  },
+  historyPlayOverlay: {
+    position: 'absolute',
+    inset: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  historyProgressBg: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  historyProgressFill: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+  },
+  historyTitle: {
+    color: Colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  historyEp: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  historyTime: {
+    color: Colors.primary,
+    fontSize: 10,
+    marginTop: 1,
+    fontWeight: '600',
+  },
+  seeAllText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // Genre modal

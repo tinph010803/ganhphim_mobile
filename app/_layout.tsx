@@ -6,9 +6,15 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { Colors } from '@/constants/colors';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
+import { getHomeMovies } from '@/lib/ophim';
 
 export default function RootLayout() {
   useFrameworkReady();
+
+  useEffect(() => {
+    // Warm cache in background
+    getHomeMovies().catch(() => {});
+  }, []);
 
   return (
     <AuthProvider>
@@ -29,6 +35,7 @@ export default function RootLayout() {
         <Stack.Screen name="favorites" />
         <Stack.Screen name="profile-edit" />
         <Stack.Screen name="watch-history" />
+        <Stack.Screen name="admin/featured" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="light" />

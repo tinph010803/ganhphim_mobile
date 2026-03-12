@@ -63,7 +63,7 @@ export default function MovieDetailScreen() {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const gtavnMovieIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [playerParams, setPlayerParams] = useState<{ url: string; title: string; episode: string; movieId: string; movieSlug: string; serverLabel: string; poster: string; initialTime?: string } | null>(null);
+  const [playerParams, setPlayerParams] = useState<{ url: string; title: string; episode: string; movieId: string; movieSlug: string; serverLabel: string; poster: string; initialTime?: string; servers?: string } | null>(null);
   const [infoExpanded, setInfoExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('Tập phim');
   const [selectedServerIdx, setSelectedServerIdx] = useState(0);
@@ -73,6 +73,11 @@ export default function MovieDetailScreen() {
   const [cast, setCast] = useState<CastMember[]>([]);
   const [castLoading, setCastLoading] = useState(false);
   const [castFetched, setCastFetched] = useState(false);
+  const [upcomingShowtime, setUpcomingShowtime] = useState<{
+    date: string;
+    time: string | null;
+    episodes: string[];
+  } | null>(null);
 
   // Khi quay về từ player, reset
   useFocusEffect(useCallback(() => { setPlayerParams(null); }, []));
@@ -128,6 +133,11 @@ export default function MovieDetailScreen() {
   }, [id]);
 
   useEffect(() => {
+    if (!movie) return;
+    checkUpcomingSchedule(movie.slug || id);
+  }, [movie]);
+
+  useEffect(() => {
     if (id && user) {
       loadGtavnIdAndCheckFavorite();
     } else {
@@ -174,10 +184,47 @@ export default function MovieDetailScreen() {
       movieId: gtavnMovieIdRef.current ?? id ?? '',
       movieSlug: id ?? '',
       serverLabel: targetServer,
-      poster: movie.poster_url ?? '',
+      poster: movie.thumb_url ?? '',
+      servers: JSON.stringify(servers),
       initialTime: String(Math.floor(Number(resumeTime) || 0)),
     });
   }, [movie, resumeTime, resumeEpisode, resumeServer]);
+
+  const checkUpcomingSchedule = async (slug: string) => {
+    const today = new Date();
+    const dates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      return d;
+    });
+    try {
+      const results = await Promise.all(
+        dates.map((d) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return fetch(`https://rophimm.me/baseapi/api/v1/showtimes/by-date/${y}-${m}-${day}`)
+            .then((r) => (r.ok ? r.json() : []))
+            .catch(() => []);
+        })
+      );
+      for (let i = 0; i < results.length; i++) {
+        const matches = (results[i] as any[]).filter((item: any) => item.movie?.slug === slug);
+        if (matches.length > 0) {
+          const d = dates[i];
+          const y = d.getFullYear();
+          const mo = String(d.getMonth() + 1).padStart(2, '0');
+          const dy = String(d.getDate()).padStart(2, '0');
+          setUpcomingShowtime({
+            date: `${dy}-${mo}-${y}`,
+            time: matches[0].show_time ?? null,
+            episodes: matches.map((m: any) => m.episode).filter(Boolean),
+          });
+          return;
+        }
+      }
+    } catch {}
+  };
 
   const loadMovie = async () => {
     try {
@@ -221,6 +268,9 @@ export default function MovieDetailScreen() {
 
   const openPlayer = (url: string, episodeName?: string, srvLabel?: string, startTime?: number) => {
     if (!url) return;
+    const srvData = (movie?.servers?.length ?? 0) > 0
+      ? movie!.servers!
+      : (movie?.episodes_data ? [{ name: srvLabel || 'Vietsub #1', episodes: movie.episodes_data }] : []);
     setPlayerParams({
       url,
       title: movie?.title ?? '',
@@ -228,7 +278,8 @@ export default function MovieDetailScreen() {
       movieId: gtavnMovieIdRef.current ?? id ?? '',
       movieSlug: id ?? '',
       serverLabel: srvLabel ?? '',
-      poster: movie?.poster_url ?? '',
+      poster: movie?.thumb_url ?? '',
+      servers: JSON.stringify(srvData),
       ...(startTime && startTime > 0 ? { initialTime: String(Math.floor(startTime)) } : {}),
     });
   };
@@ -382,6 +433,30 @@ export default function MovieDetailScreen() {
                 </Text>
               )}
             </View>
+          )}
+
+          {/* Upcoming schedule banner */}
+          {upcomingShowtime && (
+            <LinearGradient
+              colors={['#6B21A8', '#DB2777']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.scheduleBanner}
+            >
+              <Image
+                source={{ uri: 'https://thiaphim.net/images/alarm.gif' }}
+                style={styles.alarmIcon}
+              />
+              <Text style={styles.scheduleText}>
+                <Text style={styles.scheduleBold}>{movie.title}</Text>
+                {(upcomingShowtime.episodes ?? []).length > 0
+                  ? ` — ${(upcomingShowtime.episodes ?? []).join(' & ')}`
+                  : ''}{' sẽ phát sóng'}
+                {upcomingShowtime.time ? ` ${upcomingShowtime.time}` : ''}{' ngày '}
+                <Text style={styles.scheduleBold}>{upcomingShowtime.date}</Text>
+                {'. Các bạn nhớ đón xem nhé 😘'}
+              </Text>
+            </LinearGradient>
           )}
 
           {/* Big watch button */}
@@ -733,6 +808,31 @@ const styles = StyleSheet.create({
   infoBody: { color: 'rgba(255,255,255,0.7)', fontSize: 13, lineHeight: 20, marginBottom: 10 },
   infoMeta: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginBottom: 4 },
   infoMetaLabel: { color: '#fff', fontWeight: '700' },
+
+  // Schedule banner
+  scheduleBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 18,
+    marginBottom: 10,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  alarmIcon: {
+    width: 36,
+    height: 36,
+  },
+  scheduleText: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  scheduleBold: {
+    fontWeight: '700',
+  },
 
   // Watch button
   watchBtnLarge: {
