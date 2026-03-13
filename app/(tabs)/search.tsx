@@ -43,6 +43,38 @@ function countActive(f: FilterState) {
 // ─── Movie Card ───────────────────────────────────────────────────────────────
 function SearchMovieCard({ movie }: { movie: Movie }) {
   const router = useRouter();
+    const LT_PATTERN = /lồng tiếng|lồng\s*tiếng|long\s*tieng|dubbed/i;
+    const TM_PATTERN = /thuyết minh|thuyet\s*minh/i;
+    const SUB_PATTERN = /vietsub|phụ đề|phu\s*de/i;
+    const parseEpisodeNumber = (value?: string | number): number => {
+      const match = String(value ?? '').match(/\d+/);
+      return match ? Number(match[0]) : 0;
+    };
+    const total = movie.episodes;
+    const isSeries = total > 1;
+    const dubbedServer = movie.servers?.find(s => LT_PATTERN.test(s.name));
+    const thuyetMinhServer = movie.servers?.find(s => TM_PATTERN.test(s.name));
+    const subbedServer = movie.servers?.find(s => !LT_PATTERN.test(s.name) && !TM_PATTERN.test(s.name));
+    const dubbedLast = movie.last_episodes?.find(ep => LT_PATTERN.test(ep.server_name));
+    const thuyetMinhLast = movie.last_episodes?.find(ep => TM_PATTERN.test(ep.server_name));
+    const subbedLast = movie.last_episodes?.find(ep => !LT_PATTERN.test(ep.server_name) && !TM_PATTERN.test(ep.server_name));
+    const hasLangLt = !!(movie.lang_key?.includes('lt') || LT_PATTERN.test(movie.lang ?? ''));
+    const hasLangTm = !!(movie.lang_key?.includes('tm') || TM_PATTERN.test(movie.lang ?? ''));
+    const hasLangSub = !!(movie.lang_key?.includes('vs') || SUB_PATTERN.test(movie.lang ?? ''));
+    const hasLT = !!dubbedServer || hasLangLt || !!dubbedLast;
+    const hasTM = !!thuyetMinhServer || hasLangTm || !!thuyetMinhLast;
+    const hasDubbed = hasLT || hasTM;
+    const hasSubbed = !!subbedServer || !!subbedLast || hasLangSub;
+    const subbedLastCount = parseEpisodeNumber(subbedLast?.name);
+    const dubbedLastCount = parseEpisodeNumber(dubbedLast?.name);
+    const thuyetMinhLastCount = parseEpisodeNumber(thuyetMinhLast?.name);
+    const subbedCount = (subbedServer?.episodes?.length ?? 0) > 0 ? subbedServer!.episodes.length : (subbedLastCount || movie.current_episode);
+    const dubbedCount = (dubbedServer?.episodes?.length ?? 0) > 0 ? dubbedServer!.episodes.length : (dubbedLastCount || movie.current_episode);
+    const thuyetMinhCount = (thuyetMinhServer?.episodes?.length ?? 0) > 0 ? thuyetMinhServer!.episodes.length : (thuyetMinhLastCount || movie.current_episode);
+    const audioPrefix = hasTM ? 'TM' : 'LT';
+    const audioCount = hasTM ? thuyetMinhCount : dubbedCount;
+    const subbedText = isSeries ? `PĐ.${subbedCount}/${total}` : `PĐ.${subbedCount}`;
+    const dubbedText = isSeries ? `${audioPrefix}.${audioCount}/${total}` : `${audioPrefix}.${audioCount}`;
   return (
     <TouchableOpacity
       style={[styles.card, { width: CARD_WIDTH }]}
@@ -51,15 +83,31 @@ function SearchMovieCard({ movie }: { movie: Movie }) {
     >
       <View style={styles.imageContainer}>
         <Image source={{ uri: movie.thumb_url }} style={styles.poster} resizeMode="cover" />
-        {!!movie.current_episode && (
-          <View style={styles.episodeBadge}>
-            <Text style={styles.episodeText}>
-              {!isNaN(Number(movie.current_episode))
-                ? `Tập ${movie.current_episode}`
-                : String(movie.current_episode)}
-            </Text>
+        {!!movie.imdb_rating && movie.imdb_rating > 0 && (
+          <View style={styles.imdbBadge}>
+            <Text style={styles.imdbText}>IMDb {movie.imdb_rating}</Text>
           </View>
         )}
+        <View style={styles.badgesContainer}>
+          {movie.status === 'trailer' ? (
+            <View style={styles.episodeBadge}>
+              <Text style={styles.episodeText}>Sắp Chiếu</Text>
+            </View>
+          ) : (
+            <>
+              {hasDubbed && (
+                <View style={[styles.episodeBadge, styles.ltBadge]}>
+                  <Text style={styles.episodeText}>{dubbedText}</Text>
+                </View>
+              )}
+              {(hasSubbed || !hasDubbed) && (
+                <View style={styles.episodeBadge}>
+                  <Text style={styles.episodeText}>{subbedText}</Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
       </View>
       <Text style={styles.cardTitle} numberOfLines={2}>{movie.title}</Text>
       {!!movie.title_en && (
@@ -436,16 +484,38 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBackground,
   },
   poster: { width: '100%', height: '100%' },
-  episodeBadge: {
+  imdbBadge: {
     position: 'absolute',
-    bottom: 8,
+    top: 8,
     left: 8,
+    backgroundColor: '#F5C518',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  imdbText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  episodeBadge: {
     backgroundColor: 'rgba(77, 85, 118, 0.95)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
   },
   episodeText: { color: Colors.text, fontSize: 11, fontWeight: '600' },
+    badgesContainer: {
+      position: 'absolute',
+      bottom: 8,
+      left: 8,
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+      gap: 4,
+    },
+    ltBadge: {
+      backgroundColor: 'rgba(230, 126, 34, 0.95)',
+    },
   cardTitle: { color: Colors.text, fontSize: 12, fontWeight: '600', marginTop: 6, lineHeight: 16 },
   cardSub: { color: Colors.textSecondary, fontSize: 10, marginTop: 2 },
 

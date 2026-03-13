@@ -59,7 +59,11 @@ function stripHtml(content: string): string {
 
 function mapOPhimMovie(raw: any): Movie {
   const episodeTotal = toNumber(raw.episode_total, 1);
-  const currentEpisode = Math.max(toNumber(raw.episode_current, 1), 1);
+  const rawEpisodeCurrent = String(raw.episode_current || '');
+  const isTrailerStatus =
+    String(raw.status || '').toLowerCase() === 'trailer' ||
+    rawEpisodeCurrent.toLowerCase() === 'trailer';
+  const currentEpisode = isTrailerStatus ? 0 : Math.max(toNumber(raw.episode_current, 1), 1);
   const rating = toNumber(raw.imdb?.vote_average ?? raw.tmdb?.vote_average ?? raw.imdb_rating, 0);
 
   const genres: string[] = Array.isArray(raw.category)
@@ -96,8 +100,8 @@ function mapOPhimMovie(raw: any): Movie {
     duration_text: String(raw.time || ''),
     quality: String(raw.quality || 'HD'),
     age_rating: String(raw.age_rating || 'T13'),
-    is_series: Math.max(episodeTotal, currentEpisode) > 1,
-    status: String(raw.status || ''),
+    is_series: !isTrailerStatus && Math.max(episodeTotal, currentEpisode) > 1,
+    status: isTrailerStatus ? 'trailer' : String(raw.status || ''),
     is_featured: false,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -127,6 +131,15 @@ function mapOPhimMovie(raw: any): Movie {
     actors,
     tmdb_id: raw.tmdb?.id ? Number(raw.tmdb.id) : undefined,
     tmdb_type: raw.tmdb?.type === 'tv' ? 'tv' : 'movie',
+    lang: String(raw.lang || ''),
+    lang_key: Array.isArray(raw.lang_key) ? (raw.lang_key as string[]) : [],
+    last_episodes: Array.isArray(raw.last_episodes)
+      ? raw.last_episodes.map((ep: any) => ({
+          server_name: String(ep.server_name || ''),
+          name: String(ep.name || ''),
+          is_ai: Boolean(ep.is_ai),
+        }))
+      : [],
   };
 }
 
@@ -154,7 +167,7 @@ export async function getHomeMovies(): Promise<Movie[]> {
     const items = (json?.data?.items || json?.items || []) as any[];
     const data = items
       .map(mapOPhimMovie)
-      .filter((movie) => !!movie.id && !!movie.slug);
+      .filter((movie) => !!movie.id && !!movie.slug && movie.status !== 'trailer');
     homeCache = {
       data,
       expiresAt: Date.now() + HOME_CACHE_TTL,
@@ -173,7 +186,7 @@ export async function getMoviesByCountry(country: string, page: number = 1): Pro
   try {
     const json = await fetchOPhim(`/v1/api/quoc-gia/${country}?page=${page}`);
     const items = (json?.data?.items || json?.items || []) as any[];
-    return items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+    return items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug && movie.status !== 'trailer');
   } catch {
     return [];
   }
@@ -197,7 +210,7 @@ export async function getMoviesByCountryPaged(
     const json = await fetchOPhim(`/v1/api/quoc-gia/${country}?page=${page}`);
     const items = (json?.data?.items || json?.items || []) as any[];
     const totalPages = parseTotalPages(json?.data as any);
-    const movies = items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+    const movies = items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug && movie.status !== 'trailer');
     return { movies, totalPages };
   } catch {
     return { movies: [], totalPages: 1 };
@@ -208,7 +221,7 @@ export async function getMoviesByType(type: string, page: number = 1): Promise<M
   try {
     const json = await fetchOPhim(`/v1/api/danh-sach/${type}?page=${page}`);
     const items = (json?.data?.items || json?.items || []) as any[];
-    return items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+    return items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug && movie.status !== 'trailer');
   } catch {
     return [];
   }
@@ -222,7 +235,7 @@ export async function getMoviesByTypePaged(
     const json = await fetchOPhim(`/v1/api/danh-sach/${type}?page=${page}`);
     const items = (json?.data?.items || json?.items || []) as any[];
     const totalPages = parseTotalPages(json?.data as any);
-    const movies = items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug);
+    const movies = items.map(mapOPhimMovie).filter((movie) => !!movie.id && !!movie.slug && movie.status !== 'trailer');
     return { movies, totalPages };
   } catch {
     return { movies: [], totalPages: 1 };
@@ -240,7 +253,7 @@ export async function getMoviesByGenrePaged(
     const json = await fetchOPhim(`/v1/api/the-loai/${genre}?page=${page}${sortParam}`);
     const items = (json?.data?.items || json?.items || []) as any[];
     const totalPages = parseTotalPages(json?.data as any);
-    const movies = items.map(mapOPhimMovie).filter((m) => !!m.id && !!m.slug);
+    const movies = items.map(mapOPhimMovie).filter((m) => !!m.id && !!m.slug && m.status !== 'trailer');
     return { movies, totalPages };
   } catch {
     return { movies: [], totalPages: 1 };
@@ -297,7 +310,7 @@ export async function getMoviesFilteredPaged(
     const json = await fetchOPhim(path);
     const items = ((json?.data as any)?.items || []) as any[];
     const totalPages = parseTotalPages(json?.data as any);
-    const movies = items.map(mapOPhimMovie).filter((m: Movie) => !!m.id && !!m.slug);
+    const movies = items.map(mapOPhimMovie).filter((m: Movie) => !!m.id && !!m.slug && m.status !== 'trailer');
     return { movies, totalPages };
   } catch {
     return { movies: [], totalPages: 1 };

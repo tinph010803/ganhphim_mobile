@@ -28,6 +28,9 @@ export interface Movie {
   actors?: string[];
   tmdb_id?: number;
   tmdb_type?: 'movie' | 'tv';
+  lang?: string;
+  lang_key?: string[];
+  last_episodes?: Array<{ server_name: string; name: string; is_ai?: boolean }>;
 }
 
 export interface Category {

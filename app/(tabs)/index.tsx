@@ -38,6 +38,38 @@ const Top10Card = memo(function Top10Card({ item, index }: { item: Movie; index:
     const id = item.slug || item.id;
     if (id) router.push({ pathname: '/movie/[id]', params: { id } });
   }, [item.slug, item.id]);
+    const LT_PATTERN = /lồng tiếng|lồng\s*tiếng|long\s*tieng|dubbed/i;
+    const TM_PATTERN = /thuyết minh|thuyet\s*minh/i;
+    const SUB_PATTERN = /vietsub|phụ đề|phu\s*de/i;
+    const parseEpisodeNumber = (value?: string | number): number => {
+      const match = String(value ?? '').match(/\d+/);
+      return match ? Number(match[0]) : 0;
+    };
+    const total = item.episodes;
+    const isSeries = total > 1;
+    const dubbedServer = item.servers?.find(s => LT_PATTERN.test(s.name));
+    const thuyetMinhServer = item.servers?.find(s => TM_PATTERN.test(s.name));
+    const subbedServer = item.servers?.find(s => !LT_PATTERN.test(s.name) && !TM_PATTERN.test(s.name));
+    const dubbedLast = item.last_episodes?.find(ep => LT_PATTERN.test(ep.server_name));
+    const thuyetMinhLast = item.last_episodes?.find(ep => TM_PATTERN.test(ep.server_name));
+    const subbedLast = item.last_episodes?.find(ep => !LT_PATTERN.test(ep.server_name) && !TM_PATTERN.test(ep.server_name));
+    const hasLangLt = !!(item.lang_key?.includes('lt') || LT_PATTERN.test(item.lang ?? ''));
+    const hasLangTm = !!(item.lang_key?.includes('tm') || TM_PATTERN.test(item.lang ?? ''));
+    const hasLangSub = !!(item.lang_key?.includes('vs') || SUB_PATTERN.test(item.lang ?? ''));
+    const hasLT = !!dubbedServer || hasLangLt || !!dubbedLast;
+    const hasTM = !!thuyetMinhServer || hasLangTm || !!thuyetMinhLast;
+    const hasDubbed = hasLT || hasTM;
+    const hasSubbed = !!subbedServer || !!subbedLast || hasLangSub;
+    const subbedLastCount = parseEpisodeNumber(subbedLast?.name);
+    const dubbedLastCount = parseEpisodeNumber(dubbedLast?.name);
+    const thuyetMinhLastCount = parseEpisodeNumber(thuyetMinhLast?.name);
+    const subbedCount = (subbedServer?.episodes?.length ?? 0) > 0 ? subbedServer!.episodes.length : (subbedLastCount || item.current_episode);
+    const dubbedCount = (dubbedServer?.episodes?.length ?? 0) > 0 ? dubbedServer!.episodes.length : (dubbedLastCount || item.current_episode);
+    const thuyetMinhCount = (thuyetMinhServer?.episodes?.length ?? 0) > 0 ? thuyetMinhServer!.episodes.length : (thuyetMinhLastCount || item.current_episode);
+    const audioPrefix = hasTM ? 'TM' : 'LT';
+    const audioCount = hasTM ? thuyetMinhCount : dubbedCount;
+    const subbedText = isSeries ? `PĐ.${subbedCount}/${total}` : `PĐ.${subbedCount}`;
+    const dubbedText = isSeries ? `${audioPrefix}.${audioCount}/${total}` : `${audioPrefix}.${audioCount}`;
   return (
     <TouchableOpacity
       style={styles.top10Card}
@@ -46,12 +78,32 @@ const Top10Card = memo(function Top10Card({ item, index }: { item: Movie; index:
     >
       <View style={styles.top10ImageWrap}>
         <Image source={{ uri: item.thumb_url }} style={styles.top10Poster} resizeMode="cover" fadeDuration={0} />
+        {!!item.imdb_rating && item.imdb_rating > 0 && (
+          <View style={styles.top10ImdbBadge}>
+            <Text style={styles.top10ImdbText}>IMDb {item.imdb_rating}</Text>
+          </View>
+        )}
         <View style={styles.top10RankWrap}>
           <Text style={styles.top10Rank}>{index + 1}</Text>
         </View>
-        <View style={styles.episodeBadgeSmall}>
-          <Text style={styles.episodeBadgeSmallText}>PĐ.{item.current_episode}</Text>
-        </View>
+        {item.status === 'trailer' ? (
+          <View style={styles.episodeBadgeSmall}>
+            <Text style={styles.episodeBadgeSmallText}>Sắp Chiếu</Text>
+          </View>
+        ) : (
+          <View style={styles.top10BadgesContainer}>
+            {hasDubbed && (
+              <View style={[styles.top10BadgeInner, styles.top10LtBadge]}>
+                <Text style={styles.episodeBadgeSmallText}>{dubbedText}</Text>
+              </View>
+            )}
+            {(hasSubbed || !hasDubbed) && (
+              <View style={styles.top10BadgeInner}>
+                <Text style={styles.episodeBadgeSmallText}>{subbedText}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
       <Text style={styles.top10Title} numberOfLines={2}>{item.title}</Text>
       <Text style={styles.top10TitleEn} numberOfLines={1}>{item.title_en}</Text>
@@ -329,7 +381,7 @@ export default function HomeScreen() {
     return (
       <View style={[styles.sectionContainer, styles.footerPadding]}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Top 10 Phậm Lᮧ Hay Nhức Nách</Text>
+          <Text style={styles.sectionTitle}>Top 10 Phậm Lᮧ Hay </Text>
         </View>
         <FlatList
           horizontal
@@ -658,6 +710,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  top10ImdbBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#F5C518',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 2,
+  },
+  top10ImdbText: {
+    color: '#000',
+    fontSize: 9,
+    fontWeight: '800',
+  },
   top10RankWrap: {
     position: 'absolute',
     bottom: 0,
@@ -687,6 +754,23 @@ const styles = StyleSheet.create({
   episodeBadgeSmallText: {
     color: Colors.text,
     fontSize: 10,
+      top10BadgesContainer: {
+        position: 'absolute',
+        top: 6,
+        left: 6,
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 4,
+      },
+      top10BadgeInner: {
+        backgroundColor: 'rgba(77, 85, 118, 0.95)',
+        paddingHorizontal: 6,
+        paddingVertical: 3,
+        borderRadius: 999,
+      },
+      top10LtBadge: {
+        backgroundColor: 'rgba(230, 126, 34, 0.95)',
+      },
     fontWeight: '600',
   },
   top10Title: {
