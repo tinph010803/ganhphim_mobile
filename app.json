@@ -32,6 +32,14 @@
       "expo-font",
       "expo-web-browser"
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1ca26c49-f22d-4522-941e-76debe8eecca",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "experiments": {
       "typedRoutes": true
     },
