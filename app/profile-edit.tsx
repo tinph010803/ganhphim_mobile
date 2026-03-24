@@ -23,22 +23,14 @@ import { useToast } from '@/context/ToastContext';
 import { apiUpdateProfile, apiChangePassword } from '@/lib/authApi';
 
 const PRESET_AVATARS = [
-  'https://img.upanhnhanh.com/b856b5d4b96a98e544d3562248ff1a8d',
-  'https://img.upanhnhanh.com/22afc8febfe3d33bddb78c8d7a77a935',
-  'https://img.upanhnhanh.com/faa07e2311631e9b839c6aa2f9acb126',
-  'https://img.upanhnhanh.com/bccf569b6d47302d9a36e01617bdf11c',
-  'https://img.upanhnhanh.com/eb45ed266fb2d0ba432a4a0aacc1c4e6',
-  'https://img.upanhnhanh.com/7fe5e700f1134c59f31635f45d3dd770',
-  'https://img.upanhnhanh.com/8b3f1f4c86cab9f097b6c698eb6eaeb8',
-  'https://img.upanhnhanh.com/581f8b596fb139411ec9e80c9ca56df8',
-  'https://img.upanhnhanh.com/f4e91293a2fe53b7ff87e5f849f7029f',
-  'https://img.upanhnhanh.com/ff59efd078275a31a192b471b2750c9c',
-  'https://img.upanhnhanh.com/04b1af31b8991de43bac21896ec9dedf',
-  'https://img.upanhnhanh.com/052808004949cb5435812c2ae7ae0fe7',
-  'https://img.upanhnhanh.com/279a84ab982e28b5268e2ddb3db09748',
-  'https://img.upanhnhanh.com/f7d320042efd02685f442bb5eb28aaff',
-  'https://img.upanhnhanh.com/94d7b48d92e1ebcd192cc263414f4fe5',
-  'https://img.upanhnhanh.com/b7700fe2fd3f640dbc0f7ef91e28202b'
+  'https://img.upanhnhanh.com/25ac35b6f54550d9583906919fb61fbf',
+  'https://img.upanhnhanh.com/e7f9fa0b547c0fe6d021cc2c6556ae62',
+  'https://img.upanhnhanh.com/093485df2403b756ae1ce245dc30ceb6',
+  'https://img.upanhnhanh.com/afec688dcdc9eaedab5abc6edc624950',
+  'https://img.upanhnhanh.com/4b460da3a5603611b8331d7d17cb5046',
+  'https://img.upanhnhanh.com/b504ee6715bb0775d243e2633500a5a5',
+  'https://img.upanhnhanh.com/4655a64ffcc05c7ea7a8e9c7fe1c768c',
+  'https://img.upanhnhanh.com/b6e97b1e0283c9fd644bee220f8b1ad1',
 ];
 
 type SheetType = 'avatar' | 'info' | 'password' | null;
