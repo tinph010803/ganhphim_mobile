@@ -329,7 +329,7 @@ export default function HomeScreen() {
         </View>
         <Text style={styles.historyTitle} numberOfLines={2}>{entry.movieTitle}</Text>
         <Text style={styles.historyEp} numberOfLines={1}>
-          {entry.episodeName ? `Tập ${entry.episodeName}` : 'Tập 1'}
+          {entry.episodeName ? `${entry.episodeName}` : 'Tập 1'}
         </Text>
         <Text style={styles.historyTime} numberOfLines={1}>
           {formatTime(entry.time)} / {formatTime(entry.duration)}

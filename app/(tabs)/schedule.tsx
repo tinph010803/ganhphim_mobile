@@ -105,7 +105,7 @@ export default function ScheduleScreen() {
   const renderDateItem = (day: Date, idx: number) => {
     const isSelected = isSameday(day, selectedDay);
     const isToday = isSameday(day, today);
-    const dayName = isToday ? 'ôm nay' : DAY_NAMES[day.getDay()];
+    const dayName = isToday ? 'Hôm nay' : DAY_NAMES[day.getDay()];
     const dd = String(day.getDate()).padStart(2, '0');
     const mm = String(day.getMonth() + 1).padStart(2, '0');
     return (

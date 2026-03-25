@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,9 @@ import {
   ChevronUp,
   MessageCircle,
   RefreshCw,
+  Monitor,
+  Mic,
+  Server,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path as SvgPath } from 'react-native-svg';
@@ -46,6 +49,35 @@ const TABS = ['Tập phim', 'Gallery', 'OST', 'Diễn viên', 'Đề xuất'];
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
+
+function stripProviderTag(serverName: string): string {
+  return serverName.replace(/\s*\[KK\]\s*/i, '').trim();
+}
+
+function detectProvider(serverName: string): 'OP' | 'KK' {
+  return /\[KK\]/i.test(serverName) ? 'KK' : 'OP';
+}
+
+function extractMachineBaseName(serverName: string): string {
+  const clean = stripProviderTag(serverName);
+  const withoutParenLang = clean.replace(/\((vietsub|thuyet\s*minh|thuyết\s*minh)\)/i, '').trim();
+  const withoutPrefixLang = withoutParenLang.replace(/^(vietsub|thuyet\s*minh|thuyết\s*minh)\s*/i, '').trim();
+  return withoutPrefixLang || clean;
+}
+
+function detectAudioType(serverName: string): 'vietsub' | 'thuyet-minh' | 'default' {
+  const plain = stripProviderTag(serverName).toLowerCase();
+  if (plain.includes('thuyết minh') || plain.includes('thuyet minh')) return 'thuyet-minh';
+  if (plain.includes('vietsub')) return 'vietsub';
+  return 'default';
+}
+
+type ServerMachine = {
+  key: string;
+  label: string;
+  provider: 'OP' | 'KK';
+  serverIndexes: number[];
+};
 
 export default function MovieDetailScreen() {
   const router = useRouter();
@@ -67,6 +99,8 @@ export default function MovieDetailScreen() {
   const [infoExpanded, setInfoExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('Tập phim');
   const [selectedServerIdx, setSelectedServerIdx] = useState(0);
+  const [selectedMachineIdx, setSelectedMachineIdx] = useState(0);
+  const [serverDropdownOpen, setServerDropdownOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [spoiler, setSpoiler] = useState(false);
   const [commentTab, setCommentTab] = useState<'Bình luận' | 'Đánh giá'>('Bình luận');
@@ -136,6 +170,40 @@ export default function MovieDetailScreen() {
     if (!movie) return;
     checkUpcomingSchedule(movie.slug || id);
   }, [movie]);
+
+  useEffect(() => {
+    setSelectedServerIdx(0);
+    setSelectedMachineIdx(0);
+    setServerDropdownOpen(false);
+  }, [movie?.id]);
+
+  const movieServers = useMemo(
+    () => ((movie?.servers?.length ?? 0) > 0 ? movie!.servers! : [{ name: 'Vietsub #1', episodes: movie?.episodes_data ?? [] }]),
+    [movie]
+  );
+
+  const serverMachines = useMemo<ServerMachine[]>(() => {
+    const grouped = new Map<string, { provider: 'OP' | 'KK'; serverIndexes: number[] }>();
+
+    movieServers.forEach((srv, index) => {
+      const provider = detectProvider(srv.name || '');
+      const baseName = extractMachineBaseName(srv.name || `Server ${index + 1}`);
+      const key = `${provider}:${baseName.toLowerCase()}`;
+      const found = grouped.get(key);
+      if (found) {
+        found.serverIndexes.push(index);
+      } else {
+        grouped.set(key, { provider, serverIndexes: [index] });
+      }
+    });
+
+    return Array.from(grouped.entries()).map(([key, value], idx) => ({
+      key,
+      provider: value.provider,
+      label: `Máy chủ ${idx + 1} (${value.provider})`,
+      serverIndexes: value.serverIndexes,
+    }));
+  }, [movieServers]);
 
   useEffect(() => {
     if (id && user) {
@@ -534,32 +602,89 @@ export default function MovieDetailScreen() {
         <View style={styles.tabContent}>
 
           {activeTab === 'Tập phim' && movie.status !== 'trailer' && (() => {
-            const servers = (movie.servers?.length ?? 0) > 0 ? movie.servers! : [{ name: 'Vietsub #1', episodes: movie.episodes_data ?? [] }];
-            const currentEps = servers[selectedServerIdx]?.episodes ?? [];
+            const selectedMachine = serverMachines[selectedMachineIdx] ?? serverMachines[0];
+            const variantIndexes = selectedMachine?.serverIndexes ?? [0];
+            const effectiveServerIdx =
+              variantIndexes.includes(selectedServerIdx) ? selectedServerIdx : (variantIndexes[0] ?? 0);
+            const currentEps = movieServers[effectiveServerIdx]?.episodes ?? [];
             return (
               <View>
-                {/* Server selector pills + toggle */}
-                <View style={styles.serverRow}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ gap: 6, paddingRight: 8 }}>
-                    {servers.map((srv, idx) => (
+                {/* Server dropdown */}
+               {/* Tầng 1: Provider chips */}
+{(() => {
+  const providers = Array.from(new Set(serverMachines.map(m => m.provider)));
+  const activeMachine = serverMachines[selectedMachineIdx] ?? serverMachines[0];
+  const activeProvider = activeMachine?.provider ?? providers[0];
+
+  return (
+    <View>
+      <View style={styles.serverRow}>
+        <Server size={15} color="rgba(255,255,255,0.5)" />
+        <Text style={styles.serverLabel}>MÁY CHỦ :</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.machineChipRow}>
+          {providers.map((provider) => {
+            const isActive = provider === activeProvider;
+            return (
+              <TouchableOpacity
+                key={provider}
+                style={[styles.machineChip, isActive && styles.machineChipActive]}
+                onPress={() => {
+                  // Tìm machine đầu tiên của provider này
+                  const firstMachineIdx = serverMachines.findIndex(m => m.provider === provider);
+                  if (firstMachineIdx !== -1) {
+                    setSelectedMachineIdx(firstMachineIdx);
+                    setSelectedServerIdx(serverMachines[firstMachineIdx].serverIndexes[0] ?? 0);
+                  }
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.machineChipText, isActive && styles.machineChipTextActive]}>
+                  {provider}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+    </View>
+  );
+})()}
+
+                {/* Source chips in selected machine */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.sourceRow}
+                >
+                  {variantIndexes.map((srvIdx) => {
+                    const server = movieServers[srvIdx];
+                    const audioType = detectAudioType(server?.name || '');
+                    const isActive = srvIdx === effectiveServerIdx;
+                    const displayName = stripProviderTag(server?.name || `Server ${srvIdx + 1}`);
+                    return (
                       <TouchableOpacity
-                        key={idx}
-                        style={[styles.serverPill, idx === selectedServerIdx && styles.serverPillActive]}
-                        onPress={() => setSelectedServerIdx(idx)}
+                        key={srvIdx}
+                        style={[styles.sourceChip, isActive && styles.sourceChipActive]}
+                        onPress={() => setSelectedServerIdx(srvIdx)}
                         activeOpacity={0.75}
                       >
-                        <Text style={[styles.serverPillText, idx === selectedServerIdx && styles.serverPillTextActive]}>
-                          {srv.name} | {srv.episodes.length}
-                        </Text>
+                        {audioType === 'thuyet-minh'
+                          ? <Mic size={14} color={isActive ? '#fff' : 'rgba(255,255,255,0.7)'} />
+                          : <Monitor size={14} color={isActive ? '#fff' : 'rgba(255,255,255,0.7)'} />}
+                        <Text style={[styles.sourceChipText, isActive && styles.sourceChipTextActive]}>{displayName}</Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                  <View style={styles.thumbnailToggle}>
-                    <Text style={styles.thumbnailLabel}>Hiện ảnh</Text>
-                    <Switch value={false} trackColor={{ true: Colors.primary, false: '#333' }} thumbColor="#fff" />
-                  </View>
-                </View>
+                    );
+                  })}
+                </ScrollView>
 
+
+             {/* Thông báo cho server KK - Text đơn giản */}
+                {selectedMachine?.provider === 'KK' && (
+                  <Text style={styles.kkWarningText}>
+                    ⚠️ KK có quảng cáo giữa phim (15p,...). Shop sẽ khắc phục sớm. Mong thông cảm!
+                  </Text>
+                )}
+                
                 {/* Episode grid */}
                 {currentEps.length > 0 ? (
                   <View style={styles.episodeGrid}>
@@ -568,7 +693,7 @@ export default function MovieDetailScreen() {
                         key={ep.name}
                         style={styles.episodeBtn}
                         activeOpacity={0.75}
-                        onPress={() => openPlayer(ep.link_m3u8 || ep.link_embed, ep.name, servers[selectedServerIdx]?.name ?? '')}
+                        onPress={() => openPlayer(ep.link_m3u8 || ep.link_embed, ep.name, movieServers[effectiveServerIdx]?.name ?? '')}
                       >
                         <Play size={10} color="#fff" fill="#fff" />
                         <Text style={styles.episodeBtnText}>{!isNaN(Number(ep.name)) ? 'Tập ' + ep.name : ep.name}</Text>
@@ -580,7 +705,7 @@ export default function MovieDetailScreen() {
                     <TouchableOpacity
                       style={styles.episodeBtn}
                       activeOpacity={0.75}
-                      onPress={() => openPlayer(firstEpisodeUrl, 'Tập 1', servers?.[selectedServerIdx]?.name ?? '')}
+                      onPress={() => openPlayer(firstEpisodeUrl, 'Tập 1', movieServers?.[effectiveServerIdx]?.name ?? '')}
                     >
                       <Play size={10} color="#fff" fill="#fff" />
                       <Text style={styles.episodeBtnText}>Tập 1</Text>
@@ -872,27 +997,70 @@ const styles = StyleSheet.create({
 
   // Tab content
   tabContent: { paddingHorizontal: 16, paddingTop: 14 },
-  serverRow: {
+serverRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 10,
+},
+serverLabel: {
+  color: '#fff',        // trắng nổi hơn
+  fontSize: 14,         // to hơn
+  fontWeight: '700',
+},
+machineChip: {
+  backgroundColor: '#1A2134',
+  borderRadius: 6,      // vuông hơn, đổi từ 20 xuống 6
+  borderWidth: 1,
+  borderColor: 'rgba(255,255,255,0.2)',
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+},
+machineChipRow: {
+  gap: 8,
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+
+machineChipActive: {
+  backgroundColor: '#22C55E',
+  borderColor: '#22C55E',
+},
+machineChipText: {
+  color: 'rgba(255,255,255,0.75)',
+  fontSize: 13,
+  fontWeight: '700',
+},
+machineChipTextActive: {
+  color: '#1a1a1a',
+},
+  sourceRow: {
+    gap: 8,
+    paddingBottom: 10,
+  },
+  sourceChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
-  },
-  serverPill: {
+    gap: 6,
+    backgroundColor: '#1A2134',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  serverPillActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
+  sourceChipActive: {
+    backgroundColor: '#222B42',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  serverPillText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600' },
-  serverPillTextActive: { color: Colors.background, fontWeight: '700' },
-  thumbnailToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
-  thumbnailLabel: { color: Colors.textSecondary, fontSize: 12 },
+  sourceChipText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sourceChipTextActive: {
+    color: '#fff',
+  },
 
   episodeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   episodeBtn: {
@@ -1015,4 +1183,15 @@ const styles = StyleSheet.create({
   sendBtnText: { color: Colors.primary, fontSize: 14, fontWeight: '700' },
   noComments: { alignItems: 'center', gap: 10, paddingVertical: 24 },
   noCommentsText: { color: 'rgba(255,255,255,0.35)', fontSize: 13 },
+  // Warning KK có quang cáo giữa phim
+  kkWarningText: {
+    color: '#F5C518',
+    fontSize: 12.5,
+    fontWeight: '500',
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+    lineHeight: 18,
+  },
+  
 });

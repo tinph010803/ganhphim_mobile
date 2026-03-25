@@ -136,7 +136,7 @@ export default function WatchHistoryScreen() {
           </TouchableOpacity>
           <Text style={styles.episode}>
             {item.episodeName
-              ? `Tập ${item.episodeName}`
+              ? `${item.episodeName}`
               : 'Tập 1'}
             {item.serverLabel ? ` • ${item.serverLabel}` : ''}
           </Text>

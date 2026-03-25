@@ -2,6 +2,7 @@ import { Movie } from '@/types/movie';
 
 const OPHIM_BASE_URL = 'https://ophim1.com';
 const OPHIM_IMAGE_BASE_URL = 'https://img.ophim.live';
+const KKPHIM_BASE_URL = 'https://phimapi.com';
 const HOME_CACHE_TTL = 5 * 60 * 1000;
 
 let homeCache: { data: Movie[]; expiresAt: number } | null = null;
@@ -15,6 +16,31 @@ type OPhimResponse = {
     APP_DOMAIN_CDN_IMAGE?: string;
   };
   items?: unknown[];
+};
+
+type KKServerEpisode = {
+  name?: string;
+  slug?: string;
+  link_embed?: string;
+  link_m3u8?: string;
+};
+
+type KKServer = {
+  server_name?: string;
+  server_data?: KKServerEpisode[];
+};
+
+type KKMoviePayload = {
+  slug?: string;
+  origin_name?: string;
+  episode_total?: string | number;
+  episode_current?: string | number;
+};
+
+type KKDetailResponse = {
+  status?: boolean;
+  movie?: KKMoviePayload;
+  episodes?: KKServer[];
 };
 
 function normalizeImageUrl(url?: string): string {
@@ -55,6 +81,83 @@ function toNumber(value: unknown, fallback = 0): number {
 
 function stripHtml(content: string): string {
   return content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeCompareText(value: unknown): string {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function mapEpisodesList(rawEpisodes: unknown): Array<{ name: string; link_embed: string; link_m3u8: string }> {
+  return Array.isArray(rawEpisodes)
+    ? rawEpisodes.map((ep: any) => ({
+        name: String(ep.name || ep.slug || 'Tập 1'),
+        link_embed: String(ep.link_embed || ''),
+        link_m3u8: String(ep.link_m3u8 || ''),
+      }))
+    : [];
+}
+
+function extractEpisodeNumber(value: string): number {
+  const match = value.match(/\d+/);
+  if (!match) return 0;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getCurrentEpisodeFromServers(servers: Array<{ name: string; episodes: Array<{ name: string; link_embed: string; link_m3u8: string }> }>): number {
+  const maxFromServers = servers.reduce((max, server) => {
+    const maxInServer = server.episodes.reduce((acc, ep) => Math.max(acc, extractEpisodeNumber(ep.name)), 0);
+    return Math.max(max, maxInServer);
+  }, 0);
+  return Math.max(maxFromServers, 1);
+}
+
+function buildKKServers(rawServers: KKServer[] | undefined): Array<{ name: string; episodes: Array<{ name: string; link_embed: string; link_m3u8: string }> }> {
+  if (!Array.isArray(rawServers)) return [];
+  return rawServers
+    .map((srv, index) => ({
+      name: `${String(srv.server_name || `Máy chủ ${index + 1}`)} [KK]`,
+      episodes: mapEpisodesList(srv.server_data),
+    }))
+    .filter((srv) => srv.episodes.length > 0);
+}
+
+async function fetchKKMovieBySlug(slug: string): Promise<KKDetailResponse | null> {
+  try {
+    const response = await fetch(`${KKPHIM_BASE_URL}/phim/${encodeURIComponent(slug)}`);
+    if (!response.ok) {
+      return null;
+    }
+
+    const json = (await response.json()) as KKDetailResponse;
+    if (!json?.status || !json.movie) {
+      return null;
+    }
+
+    return json;
+  } catch {
+    return null;
+  }
+}
+
+function shouldMergeKKMovie(ophimRaw: Record<string, unknown>, kkMovie: KKMoviePayload): boolean {
+  const ophimSlug = normalizeCompareText(ophimRaw.slug);
+  const kkSlug = normalizeCompareText(kkMovie.slug);
+  if (!ophimSlug || !kkSlug || ophimSlug !== kkSlug) {
+    return false;
+  }
+
+  const ophimOrigin = normalizeCompareText(ophimRaw.origin_name || ophimRaw.name);
+  const kkOrigin = normalizeCompareText(kkMovie.origin_name);
+  if (!ophimOrigin || !kkOrigin) {
+    return false;
+  }
+
+  return ophimOrigin === kkOrigin;
 }
 
 function mapOPhimMovie(raw: any): Movie {
@@ -276,6 +379,25 @@ export async function getMovieBySlug(slug: string): Promise<Movie | null> {
   }
 
   const movie = mapOPhimMovie(item);
+
+  const kk = await fetchKKMovieBySlug(slug);
+  if (kk?.movie && shouldMergeKKMovie(item, kk.movie)) {
+    const kkServers = buildKKServers(kk.episodes);
+    if (kkServers.length > 0) {
+      const mergedServers = [...(movie.servers || []), ...kkServers];
+      const firstEpisodes = mergedServers[0]?.episodes || [];
+      const kkTotal = toNumber(kk.movie.episode_total, 0);
+      const kkCurrent = toNumber(kk.movie.episode_current, 0);
+      const mergedCurrent = Math.max(kkCurrent, getCurrentEpisodeFromServers(mergedServers));
+
+      movie.servers = mergedServers;
+      movie.episodes_data = firstEpisodes;
+      movie.stream_url = firstEpisodes[0]?.link_m3u8 || firstEpisodes[0]?.link_embed || movie.stream_url;
+      movie.current_episode = Math.max(mergedCurrent, movie.current_episode, 1);
+      movie.episodes = Math.max(kkTotal, mergedCurrent, movie.episodes, movie.current_episode);
+    }
+  }
+
   detailCache.set(slug, movie);
   return movie;
 }
