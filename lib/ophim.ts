@@ -221,7 +221,7 @@ function mapOPhimMovie(raw: any): Movie {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     stream_url: raw?.episodes?.[0]?.server_data?.[0]?.link_embed || raw?.episodes?.[0]?.server_data?.[0]?.link_m3u8,
-    trailer_url: String(raw.trailer_url || ''),
+    // trailer_url: String(raw.trailer_url || ''),
     episodes_data: Array.isArray(raw?.episodes?.[0]?.server_data)
       ? raw.episodes[0].server_data.map((ep: any) => ({
           name: String(ep.name || ep.slug || 'Tập 1'),

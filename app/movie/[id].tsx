@@ -42,9 +42,6 @@ import Svg, { Path as SvgPath } from 'react-native-svg';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { CastMember, getTMDBCast, searchTMDB } from '@/lib/tmdb';
 import { WebView } from 'react-native-webview';
-import YoutubePlayer from "react-native-youtube-iframe";
-
-
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -920,7 +917,7 @@ export default function MovieDetailScreen() {
             </View>
           )}
 
-          {activeTab === 'Trailer' && (
+          {/* {activeTab === 'Trailer' && (
             <View>
               {movie.trailer_url ? (() => {
                 // Extract YouTube video ID
@@ -948,7 +945,7 @@ export default function MovieDetailScreen() {
                 </View>
               )}
             </View>
-          )}
+          )} */}
 
 
           {activeTab === 'Đề xuất' && (
