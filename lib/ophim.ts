@@ -44,18 +44,30 @@ type KKDetailResponse = {
 };
 
 function normalizeImageUrl(url?: string): string {
-  if (!url) {
+  if (!url || url.trim() === '') {
     return 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg';
+  }
+
+  // Xử lý protocol-relative URL: //example.com/...
+  if (url.startsWith('//')) {
+    return `https:${url}`;
   }
 
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
   }
 
+  // Path tuyệt đối: /uploads/movies/...
   if (url.startsWith('/')) {
     return `${OPHIM_IMAGE_BASE_URL}${url}`;
   }
 
+  // Path đã có uploads/movies/ rồi → không ghép thêm
+  if (url.startsWith('uploads/')) {
+    return `${OPHIM_IMAGE_BASE_URL}/${url}`;
+  }
+
+  // Còn lại mới ghép đầy đủ
   return `${OPHIM_IMAGE_BASE_URL}/uploads/movies/${url}`;
 }
 
@@ -209,6 +221,7 @@ function mapOPhimMovie(raw: any): Movie {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     stream_url: raw?.episodes?.[0]?.server_data?.[0]?.link_embed || raw?.episodes?.[0]?.server_data?.[0]?.link_m3u8,
+    trailer_url: String(raw.trailer_url || ''),
     episodes_data: Array.isArray(raw?.episodes?.[0]?.server_data)
       ? raw.episodes[0].server_data.map((ep: any) => ({
           name: String(ep.name || ep.slug || 'Tập 1'),

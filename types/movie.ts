@@ -31,6 +31,7 @@ export interface Movie {
   lang?: string;
   lang_key?: string[];
   last_episodes?: Array<{ server_name: string; name: string; is_ai?: boolean }>;
+  trailer_url?: string;
 }
 
 export interface Category {

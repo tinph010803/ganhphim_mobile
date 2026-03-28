@@ -446,7 +446,7 @@ export default function AdminFeaturedScreen() {
 
           {/* ─── Top 10 Phim Lẻ section ─── */}
           <View style={styles.sectionDivider} />
-          <Text style={styles.sectionHeader}>Top 10 Phim Lẻ Hay Nhức Nách</Text>
+          <Text style={styles.sectionHeader}>Top 10 Phim Lẻ Hay</Text>
           <Text style={styles.hint}>Chọn đúng 10 slug phim lẻ. Để trống = lấy 10 phim lẻ mới nhất tự động.</Text>
 
           {top10Slugs.map((slug, i) => (

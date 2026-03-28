@@ -274,8 +274,15 @@ function spdLabel(s){return s===1?'B\u00ecnh th\u01b0\u1eddng':s+'x';}
 
 // HLS
 function initHls(){
-  if(hls){hls.destroy();hls=null;}
+    if(hls){hls.destroy();hls=null;}
   spin.classList.add('show');
+  
+  // Nếu là MP4 trực tiếp, không dùng HLS
+  if(M.includes('.mp4')||M.includes('fbcdn.net')||M.includes('cdninstagram.com')){
+    v.src=M;
+    v.play().catch(function(){});
+    return;
+  }
   if(typeof Hls!=='undefined'&&Hls.isSupported()){
     hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,enableWorker:false,xhrSetup:function(xhr){xhr.withCredentials=false;}});
     hls.loadSource(M);hls.attachMedia(v);
@@ -557,6 +564,15 @@ function switchEp(url,epName,srvIdx,resume){
   try{v.currentTime=0;}catch(_e){}
   if(hls){hls.destroy();hls=null;}
   spin.classList.add('show');
+    if(url.includes('.mp4')||url.includes('fbcdn.net')||url.includes('cdninstagram.com')){
+    v.src=url;
+    v.play().catch(function(){});
+    var srvName=SERVERS[CUR_SRV]?SERVERS[CUR_SRV].name:'';
+    var dispEp=epLabel(epName);
+    document.getElementById('top-title').textContent=TT+(dispEp?' | '+dispEp:'');
+    if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'episodeChange',episode:epName,serverLabel:srvName,url:url}));
+    return;
+  }
   if(typeof Hls!=='undefined'&&Hls.isSupported()){
     hls=new Hls({maxBufferLength:30,maxMaxBufferLength:60,enableWorker:false,xhrSetup:function(xhr){xhr.withCredentials=false;}});
     hls.loadSource(url);hls.attachMedia(v);

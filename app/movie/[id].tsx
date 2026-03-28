@@ -10,6 +10,7 @@ import {
   Dimensions,
   Switch,
 } from 'react-native';
+import { MovieCard } from '@/components/MovieCard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/colors';
 import { getMovieBySlug } from '@/lib/ophim';
@@ -40,22 +41,38 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { CastMember, getTMDBCast, searchTMDB } from '@/lib/tmdb';
+import { WebView } from 'react-native-webview';
+import YoutubePlayer from "react-native-youtube-iframe";
+
+
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const POSTER_WIDTH = SCREEN_WIDTH * 0.44;
 const POSTER_HEIGHT = POSTER_WIDTH * 1.5;
-const TABS = ['Tập phim', 'Gallery', 'OST', 'Diễn viên', 'Đề xuất'];
+const TABS = ['Tập phim', 'Gallery', 'Trailer', 'Diễn viên', 'Đề xuất'];
 
 function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function stripProviderTag(serverName: string): string {
-  return serverName.replace(/\s*\[KK\]\s*/i, '').trim();
+  return serverName.replace(/\s*\[(KK|HT)\]\s*/gi, '').trim();
 }
-
-function detectProvider(serverName: string): 'OP' | 'KK' {
-  return /\[KK\]/i.test(serverName) ? 'KK' : 'OP';
+function toSlug(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+function detectProvider(serverName: string): 'OP' | 'KK' | 'HT' {
+  if (/\[HT\]/i.test(serverName)) return 'HT';
+  if (/\[KK\]/i.test(serverName)) return 'KK';
+  return 'OP';
 }
 
 function extractMachineBaseName(serverName: string): string {
@@ -75,10 +92,9 @@ function detectAudioType(serverName: string): 'vietsub' | 'thuyet-minh' | 'defau
 type ServerMachine = {
   key: string;
   label: string;
-  provider: 'OP' | 'KK';
+  provider: 'OP' | 'KK' | 'HT';
   serverIndexes: number[];
 };
-
 export default function MovieDetailScreen() {
   const router = useRouter();
   const { id, resumeTime, resumeEpisode, resumeServer } = useLocalSearchParams<{
@@ -107,6 +123,12 @@ export default function MovieDetailScreen() {
   const [cast, setCast] = useState<CastMember[]>([]);
   const [castLoading, setCastLoading] = useState(false);
   const [castFetched, setCastFetched] = useState(false);
+  const [gallery, setGallery] = useState<{ type: string; file_path: string; aspect_ratio: number }[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryFetched, setGalleryFetched] = useState(false);
+  const [suggested, setSuggested] = useState<any[]>([]);
+  const [suggestedLoading, setSuggestedLoading] = useState(false);
+  const [suggestedFetched, setSuggestedFetched] = useState(false);
   const [upcomingShowtime, setUpcomingShowtime] = useState<{
     date: string;
     time: string | null;
@@ -139,6 +161,52 @@ export default function MovieDetailScreen() {
     })();
   }, [activeTab, movie, castFetched]);
 
+  // fetch gallery from TMDB when Gallery tab is selected
+  useEffect(() => {
+    if (activeTab !== 'Gallery' || !movie || galleryFetched) return;
+    setGalleryFetched(true);
+    setGalleryLoading(true);
+    fetch(`https://ophim1.com/v1/api/phim/${movie.slug || id}/images`)
+      .then(r => r.json())
+      .then(json => {
+        if (json?.data?.images) setGallery(json.data.images);
+      })
+      .catch(() => { })
+      .finally(() => setGalleryLoading(false));
+  }, [activeTab, movie, galleryFetched]);
+
+  useEffect(() => {
+    if (activeTab !== 'Đề xuất' || !movie || suggestedFetched) return;
+    setSuggestedFetched(true);
+    setSuggestedLoading(true);
+
+    const firstGenreSlug = toSlug(movie.genres?.[0] ?? ''); if (!firstGenreSlug) { setSuggestedLoading(false); return; }
+
+    fetch(`https://ophim1.com/v1/api/the-loai/${firstGenreSlug}?sort_field=year&sort_type=desc&limit=20`)
+      .then(r => r.json())
+      .then(json => {
+        const items: any[] = json?.data?.items ?? [];
+        const filtered = items
+          .filter(m => m.slug !== (movie.slug || id))
+          .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+          .slice(0, 9);
+        setSuggested(filtered.map((item: any) => ({
+          ...item,
+          title: item.name,
+          title_en: item.origin_name ?? '',
+          thumb_url: item.thumb_url?.startsWith('http')
+            ? item.thumb_url
+            : `https://img.ophim.live/uploads/movies/${item.thumb_url}`,
+          is_series: item.episode_total > 1,
+          episodes: Number(item.episode_total) || 1,
+          current_episode: Number(item.episode_current) || 0,
+          imdb_rating: 0,
+        })));
+      })
+      .catch(() => { })
+      .finally(() => setSuggestedLoading(false));
+  }, [activeTab, movie, suggestedFetched]);
+
   // Lock orientation WHILE showing black screen, THEN navigate → no rotation flash
   useEffect(() => {
     if (!playerParams) return;
@@ -148,7 +216,7 @@ export default function MovieDetailScreen() {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const SO = require('expo-screen-orientation');
         await SO.lockAsync(SO.OrientationLock.LANDSCAPE);
-      } catch (_) {}
+      } catch (_) { }
       if (!cancelled) {
         router.push({
           pathname: '/movie/player',
@@ -177,13 +245,49 @@ export default function MovieDetailScreen() {
     setServerDropdownOpen(false);
   }, [movie?.id]);
 
-  const movieServers = useMemo(
-    () => ((movie?.servers?.length ?? 0) > 0 ? movie!.servers! : [{ name: 'Vietsub #1', episodes: movie?.episodes_data ?? [] }]),
-    [movie]
-  );
+  useEffect(() => {
+    if (movie?.slug !== 'tho-oi') return;
+    const htIdx = serverMachines.findIndex(m => m.provider === 'HT');
+    if (htIdx !== -1) {
+      setSelectedMachineIdx(htIdx);
+      setSelectedServerIdx(serverMachines[htIdx].serverIndexes[0] ?? 0);
+    }
+  }, [movie?.slug]);
 
+  // const movieServers = useMemo(
+  //   () => ((movie?.servers?.length ?? 0) > 0 ? movie!.servers! : [{ name: 'Vietsub #1', episodes: movie?.episodes_data ?? [] }]),
+  //   [movie]
+  // );
+
+  // ADD FIM THỎ ƠI
+  const movieServers = useMemo(() => {
+    const base = (movie?.servers?.length ?? 0) > 0
+      ? movie!.servers!
+      : [{ name: 'CAM FULL #1', episodes: movie?.episodes_data ?? [] }];
+
+    // Hardcode máy chủ HT cho phim tho-oi (trailer Instagram/Facebook)
+    if (movie?.slug === 'tho-oi') {
+      const htServer = {
+        name: 'Vietsub #1 [HT]',
+        episodes: [
+          {
+            name: 'CAM FULL',
+            slug: 'cam',
+            filename: '',
+            link_embed: '',
+            link_m3u8: 'https://scontent.cdninstagram.com/o1/v/t2/f2/m366/AQPL600MAGA-6qW_-qcy1Nh3-BIoTUU32Ew0yHzUSvk9w0xwL1wZArcS1rUiAt8aeyEzMPTVU3NMdBvSojVpq5Zh8afGM8gkDv0FxOWYeOspsQ.mp4?_nc_cat=110&_nc_oc=Adq3q8R09CtUtkIOk14AlIIwkQukRZmTraz8KMPyJtYpEJj2kVNY_I-j-67NHuS8HxsgbYkWF1AY8YYx0NwattKj&_nc_sid=5e9851&_nc_ht=scontent.fsgn5-14.fna.fbcdn.net&_nc_ohc=-e01CByrSAkQ7kNvwHNm9pz&efg=eyJ2ZW5jb2RlX3RhZyI6Inhwdl9wcm9ncmVzc2l2ZS5GQUNFQk9PSy4uQzMuMTI4MC5kYXNoX2gyNjQtYmFzaWMtZ2VuMl83MjBwIiwieHB2X2Fzc2V0X2lkIjoxNjMzNTEyNDc0NjU5MjAyLCJhc3NldF9hZ2VfZGF5cyI6MCwidmlfdXNlY2FzZV9pZCI6MTAxMjIsImR1cmF0aW9uX3MiOjc0MTUsInVybGdlbl9zb3VyY2UiOiJ3d3cifQ==&ccb=17-1&vs=bffce5840a9127b&_nc_vs=HBksFQIYRWZiX2VwaGVtZXJhbC8wMDRCRTg5QTVCQTJENzIzNzRGMzdFRjFGMDY0N0JCM19tdF8xX3ZpZGVvX2Rhc2hpbml0Lm1wNBUAAsgBEgAVAhhAZmJfcGVybWFuZW50L0Q0NDYzNjE5Qjk1OTdENzA0MkUxM0E4QUE1OEExQzlDX2F1ZGlvX2Rhc2hpbml0Lm1wNBUCAsgBEgAoABgAGwKIB3VzZV9vaWwBMRJwcm9ncmVzc2l2ZV9yZWNpcGUBMRUAACaEps6s-OrmBRUCKAJDMywXQLz3mZmZmZoYGWRhc2hfaDI2NC1iYXNpYy1nZW4yXzcyMHARAHUCZZSeAQA&_nc_gid=nvWBEnS1JX9DOjjIHnMwnQ&_nc_zt=28&_nc_ss=7a32e&oh=00_Afx6Q5ZMJKrcRUwQ0WkUXh3xCUvf5ETeyNuMOW-E26uUQw&oe=69CB5D32&bitrate=1006318&tag=dash_h264-',
+          },
+        ],
+      };
+      return [...base, htServer];
+    }
+
+    return base;
+  }, [movie]);
+
+  // End
   const serverMachines = useMemo<ServerMachine[]>(() => {
-    const grouped = new Map<string, { provider: 'OP' | 'KK'; serverIndexes: number[] }>();
+    const grouped = new Map<string, { provider: 'OP' | 'KK' | 'HT'; serverIndexes: number[] }>();
 
     movieServers.forEach((srv, index) => {
       const provider = detectProvider(srv.name || '');
@@ -291,7 +395,7 @@ export default function MovieDetailScreen() {
           return;
         }
       }
-    } catch {}
+    } catch { }
   };
 
   const loadMovie = async () => {
@@ -331,7 +435,7 @@ export default function MovieDetailScreen() {
       if (!gtavnId) return;
       const fav = await apiCheckFavorite(gtavnId);
       setIsFavorite(fav);
-    } catch {}
+    } catch { }
   };
 
   const openPlayer = (url: string, episodeName?: string, srvLabel?: string, startTime?: number) => {
@@ -600,8 +704,8 @@ export default function MovieDetailScreen() {
 
         {/* ── Tab content ── */}
         <View style={styles.tabContent}>
-
-          {activeTab === 'Tập phim' && movie.status !== 'trailer' && (() => {
+          {/* Ngoại trừ phim THỎ ƠI */}
+          {activeTab === 'Tập phim' && (movie.status !== 'trailer' || movie.slug === 'tho-oi') && (() => {
             const selectedMachine = serverMachines[selectedMachineIdx] ?? serverMachines[0];
             const variantIndexes = selectedMachine?.serverIndexes ?? [0];
             const effectiveServerIdx =
@@ -610,45 +714,45 @@ export default function MovieDetailScreen() {
             return (
               <View>
                 {/* Server dropdown */}
-               {/* Tầng 1: Provider chips */}
-{(() => {
-  const providers = Array.from(new Set(serverMachines.map(m => m.provider)));
-  const activeMachine = serverMachines[selectedMachineIdx] ?? serverMachines[0];
-  const activeProvider = activeMachine?.provider ?? providers[0];
+                {/* Tầng 1: Provider chips */}
+                {(() => {
+                  const providers = Array.from(new Set(serverMachines.map(m => m.provider)));
+                  const activeMachine = serverMachines[selectedMachineIdx] ?? serverMachines[0];
+                  const activeProvider = activeMachine?.provider ?? providers[0];
 
-  return (
-    <View>
-      <View style={styles.serverRow}>
-        <Server size={15} color="rgba(255,255,255,0.5)" />
-        <Text style={styles.serverLabel}>MÁY CHỦ :</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.machineChipRow}>
-          {providers.map((provider) => {
-            const isActive = provider === activeProvider;
-            return (
-              <TouchableOpacity
-                key={provider}
-                style={[styles.machineChip, isActive && styles.machineChipActive]}
-                onPress={() => {
-                  // Tìm machine đầu tiên của provider này
-                  const firstMachineIdx = serverMachines.findIndex(m => m.provider === provider);
-                  if (firstMachineIdx !== -1) {
-                    setSelectedMachineIdx(firstMachineIdx);
-                    setSelectedServerIdx(serverMachines[firstMachineIdx].serverIndexes[0] ?? 0);
-                  }
-                }}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.machineChipText, isActive && styles.machineChipTextActive]}>
-                  {provider}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-    </View>
-  );
-})()}
+                  return (
+                    <View>
+                      <View style={styles.serverRow}>
+                        <Server size={15} color="rgba(255,255,255,0.5)" />
+                        <Text style={styles.serverLabel}>MÁY CHỦ :</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.machineChipRow}>
+                          {providers.map((provider) => {
+                            const isActive = provider === activeProvider;
+                            return (
+                              <TouchableOpacity
+                                key={provider}
+                                style={[styles.machineChip, isActive && styles.machineChipActive]}
+                                onPress={() => {
+                                  // Tìm machine đầu tiên của provider này
+                                  const firstMachineIdx = serverMachines.findIndex(m => m.provider === provider);
+                                  if (firstMachineIdx !== -1) {
+                                    setSelectedMachineIdx(firstMachineIdx);
+                                    setSelectedServerIdx(serverMachines[firstMachineIdx].serverIndexes[0] ?? 0);
+                                  }
+                                }}
+                                activeOpacity={0.75}
+                              >
+                                <Text style={[styles.machineChipText, isActive && styles.machineChipTextActive]}>
+                                  {provider}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    </View>
+                  );
+                })()}
 
                 {/* Source chips in selected machine */}
                 <ScrollView
@@ -678,13 +782,13 @@ export default function MovieDetailScreen() {
                 </ScrollView>
 
 
-             {/* Thông báo cho server KK - Text đơn giản */}
+                {/* Thông báo cho server KK - Text đơn giản */}
                 {selectedMachine?.provider === 'KK' && (
                   <Text style={styles.kkWarningText}>
                     ⚠️ KK có quảng cáo giữa phim (15p,...). Shop sẽ khắc phục sớm. Mong thông cảm!
                   </Text>
                 )}
-                
+
                 {/* Episode grid */}
                 {currentEps.length > 0 ? (
                   <View style={styles.episodeGrid}>
@@ -715,6 +819,9 @@ export default function MovieDetailScreen() {
               </View>
             );
           })()}
+
+
+
 
           {activeTab === 'Diễn viên' && (
             <View>
@@ -770,12 +877,103 @@ export default function MovieDetailScreen() {
             </View>
           )}
 
-          {(activeTab === 'Gallery' || activeTab === 'OST' || activeTab === 'Đề xuất') && (
-            <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>Đang cập nhật...</Text>
+
+          {activeTab === 'Gallery' && (
+            <View>
+              {galleryLoading ? (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyText}>Đang tải ảnh...</Text>
+                </View>
+              ) : gallery.length > 0 ? (
+                <View style={styles.castGrid}>
+                  {gallery.slice(0, 5).map((img, idx) => {
+                    const baseUrl = img.aspect_ratio > 1
+                      ? 'https://image.tmdb.org/t/p/w780'
+                      : 'https://image.tmdb.org/t/p/w342';
+                    const isLandscape = img.aspect_ratio > 1;
+                    return (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.castCard,
+                          isLandscape && { width: '100%', aspectRatio: img.aspect_ratio }
+                        ]}
+                      >
+                        <Image
+                          source={{ uri: baseUrl + img.file_path }}
+                          style={isLandscape
+                            ? { width: '100%', aspectRatio: img.aspect_ratio, borderRadius: 8 }
+                            : styles.castPhoto
+                          }
+                          resizeMode="cover"
+                        />
+
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyText}>Chưa có ảnh</Text>
+                </View>
+              )}
             </View>
           )}
 
+          {activeTab === 'Trailer' && (
+            <View>
+              {movie.trailer_url ? (() => {
+                // Extract YouTube video ID
+                const match = movie.trailer_url.match(
+                  /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+                );
+                const videoId = match?.[1];
+                if (!videoId) return (
+                  <View style={styles.emptyWrap}>
+                    <Text style={styles.emptyText}>Không hỗ trợ định dạng trailer này</Text>
+                  </View>
+                );
+                return (
+                  <View style={styles.trailerWrap}>
+                    <YoutubePlayer
+                      height={220}
+                      play={false}
+                      videoId={videoId}
+                    />
+                  </View>
+                );
+              })() : (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyText}>Chưa có trailer</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+
+          {activeTab === 'Đề xuất' && (
+            <View>
+              {suggestedLoading ? (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyText}>Đang tải...</Text>
+                </View>
+              ) : suggested.length > 0 ? (
+                <View style={styles.suggestGrid}>
+                  {suggested.map((item) => (
+                    <View key={item.slug} style={styles.suggestCardWrap}>
+                      <MovieCard
+                        movie={item}
+                        width={(SCREEN_WIDTH - 32 - 16) / 3} />
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyWrap}>
+                  <Text style={styles.emptyText}>Không có đề xuất</Text>
+                </View>
+              )}
+            </View>
+          )}
           {/* ── Comment section ── */}
           <View style={styles.commentSection}>
             <View style={styles.commentHeader}>
@@ -997,43 +1195,43 @@ const styles = StyleSheet.create({
 
   // Tab content
   tabContent: { paddingHorizontal: 16, paddingTop: 14 },
-serverRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 8,
-  marginBottom: 10,
-},
-serverLabel: {
-  color: '#fff',        // trắng nổi hơn
-  fontSize: 14,         // to hơn
-  fontWeight: '700',
-},
-machineChip: {
-  backgroundColor: '#1A2134',
-  borderRadius: 6,      // vuông hơn, đổi từ 20 xuống 6
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.2)',
-  paddingHorizontal: 14,
-  paddingVertical: 8,
-},
-machineChipRow: {
-  gap: 8,
-  flexDirection: 'row',
-  alignItems: 'center',
-},
+  serverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  serverLabel: {
+    color: '#fff',        // trắng nổi hơn
+    fontSize: 14,         // to hơn
+    fontWeight: '700',
+  },
+  machineChip: {
+    backgroundColor: '#1A2134',
+    borderRadius: 6,      // vuông hơn, đổi từ 20 xuống 6
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  machineChipRow: {
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
 
-machineChipActive: {
-  backgroundColor: '#22C55E',
-  borderColor: '#22C55E',
-},
-machineChipText: {
-  color: 'rgba(255,255,255,0.75)',
-  fontSize: 13,
-  fontWeight: '700',
-},
-machineChipTextActive: {
-  color: '#1a1a1a',
-},
+  machineChipActive: {
+    backgroundColor: '#22C55E',
+    borderColor: '#22C55E',
+  },
+  machineChipText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  machineChipTextActive: {
+    color: '#1a1a1a',
+  },
   sourceRow: {
     gap: 8,
     paddingBottom: 10,
@@ -1193,5 +1391,69 @@ machineChipTextActive: {
     paddingHorizontal: 4,
     lineHeight: 18,
   },
-  
+  suggestGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingBottom: 16,
+  },
+  suggestCardWrap: {
+    width: (SCREEN_WIDTH - 32 - 16) / 3,
+    overflow: 'hidden',
+  },
+  suggestCard: {
+    width: (SCREEN_WIDTH - 32 - 8) / 2,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: Colors.cardBackground,
+  },
+  suggestThumb: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+  },
+  suggestOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 8,
+    paddingTop: 24,
+    paddingBottom: 8,
+  },
+  suggestYearBadge: {
+    backgroundColor: 'rgba(245,197,24,0.9)',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  suggestYearText: {
+    color: '#1a1a1a',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  suggestTitle: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  suggestOrigin: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  trailerWrap: {
+    width: '100%',
+    height: 220,
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: '#000',
+  },
+  trailerPlayer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
 });

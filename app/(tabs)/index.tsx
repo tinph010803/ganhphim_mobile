@@ -381,7 +381,7 @@ export default function HomeScreen() {
     return (
       <View style={[styles.sectionContainer, styles.footerPadding]}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Top 10 Phậm Lᮧ Hay </Text>
+          <Text style={styles.sectionTitle}>Top 10 Phim Lẻ Hay </Text>
         </View>
         <FlatList
           horizontal
