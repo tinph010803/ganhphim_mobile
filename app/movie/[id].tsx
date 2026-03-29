@@ -251,6 +251,16 @@ export default function MovieDetailScreen() {
     }
   }, [movie?.slug]);
 
+  useEffect(() => {
+    if (movie?.slug !== 'tho-oi' && movie?.slug !== 'cuu-2026') return;
+    const htIdx = serverMachines.findIndex(m => m.provider === 'HT');
+    if (htIdx !== -1) {
+      setSelectedMachineIdx(htIdx);
+      setSelectedServerIdx(serverMachines[htIdx].serverIndexes[0] ?? 0);
+    }
+  }, [movie?.slug]);
+
+
   // const movieServers = useMemo(
   //   () => ((movie?.servers?.length ?? 0) > 0 ? movie!.servers! : [{ name: 'Vietsub #1', episodes: movie?.episodes_data ?? [] }]),
   //   [movie]
@@ -262,7 +272,6 @@ export default function MovieDetailScreen() {
       ? movie!.servers!
       : [{ name: 'CAM FULL #1', episodes: movie?.episodes_data ?? [] }];
 
-    // Hardcode máy chủ HT cho phim tho-oi (trailer Instagram/Facebook)
     if (movie?.slug === 'tho-oi') {
       const htServer = {
         name: 'Vietsub #1 [HT]',
@@ -273,6 +282,37 @@ export default function MovieDetailScreen() {
             filename: '',
             link_embed: '',
             link_m3u8: 'https://scontent.cdninstagram.com/o1/v/t2/f2/m366/AQPL600MAGA-6qW_-qcy1Nh3-BIoTUU32Ew0yHzUSvk9w0xwL1wZArcS1rUiAt8aeyEzMPTVU3NMdBvSojVpq5Zh8afGM8gkDv0FxOWYeOspsQ.mp4?_nc_cat=110&_nc_oc=Adq3q8R09CtUtkIOk14AlIIwkQukRZmTraz8KMPyJtYpEJj2kVNY_I-j-67NHuS8HxsgbYkWF1AY8YYx0NwattKj&_nc_sid=5e9851&_nc_ht=scontent.fsgn5-14.fna.fbcdn.net&_nc_ohc=-e01CByrSAkQ7kNvwHNm9pz&efg=eyJ2ZW5jb2RlX3RhZyI6Inhwdl9wcm9ncmVzc2l2ZS5GQUNFQk9PSy4uQzMuMTI4MC5kYXNoX2gyNjQtYmFzaWMtZ2VuMl83MjBwIiwieHB2X2Fzc2V0X2lkIjoxNjMzNTEyNDc0NjU5MjAyLCJhc3NldF9hZ2VfZGF5cyI6MCwidmlfdXNlY2FzZV9pZCI6MTAxMjIsImR1cmF0aW9uX3MiOjc0MTUsInVybGdlbl9zb3VyY2UiOiJ3d3cifQ==&ccb=17-1&vs=bffce5840a9127b&_nc_vs=HBksFQIYRWZiX2VwaGVtZXJhbC8wMDRCRTg5QTVCQTJENzIzNzRGMzdFRjFGMDY0N0JCM19tdF8xX3ZpZGVvX2Rhc2hpbml0Lm1wNBUAAsgBEgAVAhhAZmJfcGVybWFuZW50L0Q0NDYzNjE5Qjk1OTdENzA0MkUxM0E4QUE1OEExQzlDX2F1ZGlvX2Rhc2hpbml0Lm1wNBUCAsgBEgAoABgAGwKIB3VzZV9vaWwBMRJwcm9ncmVzc2l2ZV9yZWNpcGUBMRUAACaEps6s-OrmBRUCKAJDMywXQLz3mZmZmZoYGWRhc2hfaDI2NC1iYXNpYy1nZW4yXzcyMHARAHUCZZSeAQA&_nc_gid=nvWBEnS1JX9DOjjIHnMwnQ&_nc_zt=28&_nc_ss=7a32e&oh=00_Afx6Q5ZMJKrcRUwQ0WkUXh3xCUvf5ETeyNuMOW-E26uUQw&oe=69CB5D32&bitrate=1006318&tag=dash_h264-',
+          },
+        ],
+      };
+      return [...base, htServer];
+    }
+
+    if (movie?.slug === 'cuu-2026') {
+      const htServer = {
+        name: 'Vietsub #1 [HT]',
+        episodes: [
+          {
+            name: 'Full',
+            slug: 'full',
+            filename: '',
+            link_embed: 'https://playembed.vip/player?m3u8=https%3A%2F%2Fapi-content.onflix.xyz%2Fm3u8%2Fcdn_0_onflix_0%2F7894b7327e1b0bbfd6d7a8fda3c3f013.m3u8&poster=https%3A%2F%2Fp3-sg.tiktokcdn.com%2Fobj%2Ftiktok-obj%2Fc95ee432859301cad5af274c3358bd56&title=C%E1%BB%A9u%20-%20Tr%E1%BB%8Dn%20B%E1%BB%99&src=sn&intro=0&outro=0',
+            link_m3u8: 'https://api-content.onflix.xyz/m3u8/cdn_0_onflix_0/7894b7327e1b0bbfd6d7a8fda3c3f013.m3u8',
+          },
+        ],
+      };
+      return [...base, htServer];
+    }
+     if (movie?.slug === 'phi-vu-dong-troi') {
+      const htServer = {
+        name: 'Lồng tiếng #1 [HT]',
+        episodes: [
+          {
+            name: 'Lồng tiếng',
+            slug: 'full',
+            filename: '',
+            link_embed: '',
+            link_m3u8: 'https://s6.kkphimplayer6.com/20250731/6AvRRpCr/index.m3u8',
           },
         ],
       };
@@ -440,6 +480,16 @@ export default function MovieDetailScreen() {
     const srvData = (movie?.servers?.length ?? 0) > 0
       ? movie!.servers!
       : (movie?.episodes_data ? [{ name: srvLabel || 'Vietsub #1', episodes: movie.episodes_data }] : []);
+
+    const isHT = srvLabel?.includes('[HT]') ?? false;
+
+    // Extract movie ID từ m3u8 URL để gọi sub API
+    const getMovieId = (m3u8: string) => {
+      const match = m3u8.match(/\/([a-f0-9]{32})\.m3u8/);
+      return match?.[1] ?? '';
+    };
+    const movieFileId = isHT ? getMovieId(url) : '';
+
     setPlayerParams({
       url,
       title: movie?.title ?? '',
@@ -450,6 +500,7 @@ export default function MovieDetailScreen() {
       poster: movie?.thumb_url ?? '',
       servers: JSON.stringify(srvData),
       ...(startTime && startTime > 0 ? { initialTime: String(Math.floor(startTime)) } : {}),
+      ...(movieFileId ? { subApiUrl: `https://gota.onflix.xyz/public/${movieFileId}/sub` } : {}),
     });
   };
 

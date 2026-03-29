@@ -9,13 +9,14 @@ import * as NavigationBar from 'expo-navigation-bar';
 type _SrvEp = { name: string; link_embed: string; link_m3u8: string };
 type _SrvItem = { name: string; episodes: _SrvEp[] };
 
-function buildPlayerHtml(m3u8Url: string, title: string, episode: string, initialTime = 0, serversData: _SrvItem[] = [], initSrvIdx = 0): string {
+function buildPlayerHtml(m3u8Url: string, title: string, episode: string, initialTime = 0, serversData: _SrvItem[] = [], initSrvIdx = 0, subApiUrl = ''): string {
   const safeUrl = JSON.stringify(m3u8Url);
   const safeTitle = JSON.stringify(title);
   const safeEpisode = JSON.stringify(episode);
   const safeInitTime = JSON.stringify(initialTime);
   const safeServersLit = JSON.stringify(serversData);
   const safeInitSrv = initSrvIdx;
+
   return `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -270,7 +271,7 @@ function epLabel(n){var t=(n||'').trim();return!isNaN(Number(t))&&t!==''&&parseI
 
 function fmt(s){if(!s||isNaN(s))return'0:00';var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=Math.floor(s%60);return h>0?h+':'+p(m)+':'+p(sc):m+':'+p(sc);}
 function p(n){return n<10?'0'+n:''+n;}
-function spdLabel(s){return s===1?'B\u00ecnh th\u01b0\u1eddng':s+'x';}
+function spdLabel(s){return s+'x';}
 
 // HLS
 function initHls(){
@@ -596,42 +597,168 @@ function switchEp(url,epName,srvIdx,resume){
 }
 
 // Settings
+var SUBS=[];
+var SUB_API=${JSON.stringify(subApiUrl)};
+if(SUB_API){
+  fetch(SUB_API)
+    .then(function(r){return r.json();})
+    .then(function(arr){
+      SUBS=arr.map(function(s){return{name:s.name,url:s.url};});
+      buildSmMain(); // rebuild settings menu để hiện sub
+    })
+    .catch(function(){});
+}
+var curSubIdx=-1;
+var subCues=[];
+var subFontSize=100; // percent
+var subColor='#ffffff';
+var dualAudio=false; // song ngữ bật/tắt
+var subEl=document.createElement('div');
+subEl.id='sub-text';
+subEl.style.cssText='position:absolute;bottom:110px;left:0;right:0;text-align:center;pointer-events:none;z-index:30;padding:0 12px;';
+wrap.appendChild(subEl);
+
 function buildSmMain(){
   var html='<div class="sm-head">C\u00e0i \u0111\u1eb7t</div>';
-  if(quals.length>0)html+='<div class="sm-row" id="sm-row-ql"><span>Ch\u1ea5t l\u01b0\u1ee3ng</span><span class="sm-val"><span id="sm-ql-lbl">T\u1ef1 \u0111\u1ed9ng</span>'+chevR+'</span></div>';
-  html+='<div class="sm-row" id="sm-row-spd"><span>T\u1ed1c \u0111\u1ed9 ph\u00e1t</span><span class="sm-val"><span id="sm-spd-lbl">B\u00ecnh th\u01b0\u1eddng</span>'+chevR+'</span></div>';
-  smMain.innerHTML=html;smSub.style.display='none';smMain.style.display='block';
-  spdLbl=document.getElementById('sm-spd-lbl');qlLbl=document.getElementById('sm-ql-lbl');
+   // Chất lượng
+  if(quals.length>0){
+    var qlbl=curQ===-1?'Auto':(quals.find(function(q){return q.id===curQ;})||{label:'Auto'}).label;
+html += '<div class="sm-row" id="sm-row-ql"><span style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><polygon points="10 9 15 12 10 15 10 9" fill="currentColor"/><path d="M7 21h10"/></svg>Ch\u1ea5t l\u01b0\u1ee3ng</span><span class="sm-val"><span id="sm-ql-lbl">'+qlbl+'</span>'+chevR+'</span></div>';  }
+ 
+  // Tốc độ phát
+  html+='<div class="sm-row" id="sm-row-spd"><span style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>T\u1ed1c \u0111\u1ed9 ph\u00e1t</span><span class="sm-val"><span id="sm-spd-lbl">B\u00ecnh th\u01b0\u1eddng</span>'+chevR+'</span></div>';
+  // Phụ đề
+  var subName=curSubIdx===-1?'T\u1eaft':(SUBS[curSubIdx]?SUBS[curSubIdx].name:'T\u1eaft');
+  html+='<div class="sm-row" id="sm-row-sub"><span style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 11H4v-2h8v2zm8 0h-6v-2h6v2zm0-4H4V9h16v2z"/></svg>Ph\u1ee5 \u0111\u1ec1</span><span class="sm-val"><span id="sm-sub-lbl">'+subName+'</span>'+chevR+'</span></div>';
+  // Song ngữ
+  var dualLabel=dualAudio?'B\u1eadt':'T\u1eaft';
+  html+='<div class="sm-row" id="sm-row-dual"><span style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>Song ng\u1eef</span><span class="sm-val"><span id="sm-dual-lbl">'+dualLabel+'</span>'+chevR+'</span></div>';
+ 
+// Cỡ chữ & Màu sắc
+  html+='<div class="sm-row" id="sm-row-font"><span style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M9 4v3h5v12h3V7h5V4H9zm-6 8h3v7h3v-7h3V9H3v3z"/></svg>C\u1ee1 ch\u1eef &amp; M\u00e0u s\u1eafc</span><span class="sm-val"><span id="sm-font-lbl">'+subFontSize+'%</span>'+chevR+'</span></div>';
+
+  smMain.innerHTML=html;
+  smSub.style.display='none';
+  smMain.style.display='block';
+
+  spdLbl=document.getElementById('sm-spd-lbl');
+  qlLbl=document.getElementById('sm-ql-lbl');
   if(spdLbl)spdLbl.textContent=spdLabel(curSpd);
-  if(qlLbl){
-    var qlbl=curQ===-1?'T\u1ef1 \u0111\u1ed9ng':(quals.find(function(q){return q.id===curQ;})||{label:'T\u1ef1 \u0111\u1ed9ng'}).label;
-    qlLbl.textContent=qlbl;
-  }
-  var rowQl=document.getElementById('sm-row-ql');if(rowQl)rowQl.onclick=buildQlPage;
+
   document.getElementById('sm-row-spd').onclick=buildSpdPage;
+  document.getElementById('sm-row-sub').onclick=buildSubPage;
+  document.getElementById('sm-row-dual').onclick=buildDualPage;
+  var rowQl=document.getElementById('sm-row-ql');if(rowQl)rowQl.onclick=buildQlPage;
+  document.getElementById('sm-row-font').onclick=buildFontPage;
 }
-function buildSpdPage(){
-  var html='<div class="sm-back" id="sm-back">'+backIco+' T\u1ed1c \u0111\u1ed9 ph\u00e1t</div>';
-  SPDS.forEach(function(s){var on=s===curSpd?' on':'';html+='<div class="sm-opt'+on+'" data-s="'+s+'">'+spdLabel(s)+(s===curSpd?chk:'')+'</div>';});
+
+function buildSubPage(){
+  var html='<div class="sm-back" id="sm-back">'+backIco+' Ph\u1ee5 \u0111\u1ec1</div>';
+  html+='<div class="sm-opt'+(curSubIdx===-1?' on':'')+'" data-si="-1">T\u1eaft'+(curSubIdx===-1?chk:'')+'</div>';
+  if(SUBS.length===0){
+    html+='<div style="padding:14px;color:rgba(255,255,255,.4);font-size:13px">Kh\u00f4ng c\u00f3 ph\u1ee5 \u0111\u1ec1</div>';
+  }else{
+    SUBS.forEach(function(s,i){
+      var on=i===curSubIdx?' on':'';
+      html+='<div class="sm-opt'+on+'" data-si="'+i+'">'+s.name+(i===curSubIdx?chk:'')+'</div>';
+    });
+  }
   smMain.style.display='none';smSub.innerHTML=html;smSub.style.display='block';
   document.getElementById('sm-back').onclick=function(){buildSmMain();};
-  smSub.querySelectorAll('.sm-opt').forEach(function(el){el.onclick=function(){
-    var s=parseFloat(el.getAttribute('data-s'));v.playbackRate=s;curSpd=s;
-    if(spdLbl)spdLbl.textContent=spdLabel(s);
-    buildSmMain();
-  };});
+  smSub.querySelectorAll('.sm-opt[data-si]').forEach(function(el){
+    el.onclick=function(){
+      curSubIdx=parseInt(el.getAttribute('data-si'));
+      buildSmMain();
+    };
+  });
+}
+
+function buildDualPage(){
+  var html='<div class="sm-back" id="sm-back">'+backIco+' Song ng\u1eef</div>';
+  html+='<div class="sm-opt'+(dualAudio===false?' on':'')+'" data-da="0">T\u1eaft'+(dualAudio===false?chk:'')+'</div>';
+  html+='<div class="sm-opt'+(dualAudio===true?' on':'')+'" data-da="1">B\u1eadt'+(dualAudio===true?chk:'')+'</div>';
+  smMain.style.display='none';smSub.innerHTML=html;smSub.style.display='block';
+  document.getElementById('sm-back').onclick=function(){buildSmMain();};
+  smSub.querySelectorAll('.sm-opt[data-da]').forEach(function(el){
+    el.onclick=function(){
+      dualAudio=el.getAttribute('data-da')==='1';
+      buildSmMain();
+    };
+  });
+}
+
+function buildFontPage(){
+  var SIZES=[75,100,125,150,200];
+  var COLORS=[
+    {label:'Tr\u1eafng',val:'#ffffff'},
+    {label:'V\u00e0ng',val:'#ffff00'},
+    {label:'\u0110\u1ecf',val:'#ff4444'},
+    {label:'Xanh l\u00e1',val:'#44ff44'},
+  ];
+  var html='<div class="sm-back" id="sm-back">'+backIco+' C\u1ee1 ch\u1eef &amp; M\u00e0u s\u1eafc</div>';
+  html+='<div class="sm-head">C\u1ee1 ch\u1eef</div>';
+  SIZES.forEach(function(s){
+    var on=s===subFontSize?' on':'';
+    html+='<div class="sm-opt'+on+'" data-sz="'+s+'">'+s+'%'+(s===subFontSize?chk:'')+'</div>';
+  });
+  html+='<div class="sm-head">M\u00e0u ch\u1eef</div>';
+  COLORS.forEach(function(c){
+    var on=c.val===subColor?' on':'';
+    html+='<div class="sm-opt'+on+'" data-col="'+c.val+'" style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:50%;background:'+c.val+';border:1px solid rgba(255,255,255,.3);flex-shrink:0"></span>'+c.label+(c.val===subColor?chk:'')+'</div>';
+  });
+  smMain.style.display='none';smSub.innerHTML=html;smSub.style.display='block';
+  document.getElementById('sm-back').onclick=function(){buildSmMain();};
+  smSub.querySelectorAll('[data-sz]').forEach(function(el){
+    el.onclick=function(){
+      subFontSize=parseInt(el.getAttribute('data-sz'));
+      subEl.style.fontSize=(subFontSize/100*16)+'px';
+      buildFontPage();
+    };
+  });
+  smSub.querySelectorAll('[data-col]').forEach(function(el){
+    el.onclick=function(){
+      subColor=el.getAttribute('data-col');
+      subEl.style.color=subColor;
+      buildFontPage();
+    };
+  });
+}
+
+function buildSpdPage(){
+  var html='<div class="sm-back" id="sm-back">'+backIco+' T\u1ed1c \u0111\u1ed9 ph\u00e1t</div>';
+  SPDS.forEach(function(s){
+    var on=s===curSpd?' on':'';
+    html+='<div class="sm-opt'+on+'" data-s="'+s+'">'+s+'x'+(s===curSpd?chk:'')+'</div>';
+  });
+  smMain.style.display='none';smSub.innerHTML=html;smSub.style.display='block';
+  document.getElementById('sm-back').onclick=function(){buildSmMain();};
+  smSub.querySelectorAll('.sm-opt').forEach(function(el){
+    el.onclick=function(){
+      var s=parseFloat(el.getAttribute('data-s'));
+      v.playbackRate=s;curSpd=s;
+      if(spdLbl)spdLbl.textContent=s+'x';
+      buildSmMain();
+    };
+  });
 }
 function buildQlPage(){
   var html='<div class="sm-back" id="sm-back">'+backIco+' Ch\u1ea5t l\u01b0\u1ee3ng</div>';
-  html+='<div class="sm-opt'+(curQ===-1?' on':'')+'" data-q="-1">T\u1ef1 \u0111\u1ed9ng'+(curQ===-1?chk:'')+'</div>';
-  quals.forEach(function(q){var on=q.id===curQ?' on':'';html+='<div class="sm-opt'+on+'" data-q="'+q.id+'">'+q.label+(q.id===curQ?chk:'')+'</div>';});
+  html+='<div class="sm-opt'+(curQ===-1?' on':'')+'" data-q="-1">Auto'+(curQ===-1?chk:'')+'</div>';
+  quals.forEach(function(q){
+    var on=q.id===curQ?' on':'';
+    html+='<div class="sm-opt'+on+'" data-q="'+q.id+'">'+q.label+(q.id===curQ?chk:'')+'</div>';
+  });
   smMain.style.display='none';smSub.innerHTML=html;smSub.style.display='block';
   document.getElementById('sm-back').onclick=function(){buildSmMain();};
-  smSub.querySelectorAll('.sm-opt').forEach(function(el){el.onclick=function(){
-    var id=parseInt(el.getAttribute('data-q'));if(hls)hls.currentLevel=id;curQ=id;
-    var lbl=id===-1?'T\u1ef1 \u0111\u1ed9ng':(quals.find(function(q){return q.id===id;})||{label:'T\u1ef1 \u0111\u1ed9ng'}).label;
-    if(qlLbl)qlLbl.textContent=lbl;buildSmMain();
-  };});
+  smSub.querySelectorAll('.sm-opt').forEach(function(el){
+    el.onclick=function(){
+      var id=parseInt(el.getAttribute('data-q'));
+      if(hls)hls.currentLevel=id;curQ=id;
+      var lbl=id===-1?'Auto':(quals.find(function(q){return q.id===id;})||{label:'Auto'}).label;
+      if(qlLbl)qlLbl.textContent=lbl;
+      buildSmMain();
+    };
+  });
 }
 buildSmMain();
 document.getElementById('btn-set').addEventListener('click',function(e){
@@ -665,7 +792,7 @@ export default function PlayerScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id;
-  const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime, servers } =
+  const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime, servers, subApiUrl } =
     useLocalSearchParams<{
       url: string;
       title: string;
@@ -676,6 +803,7 @@ export default function PlayerScreen() {
       poster?: string;
       initialTime?: string;
       servers?: string;
+      subApiUrl?: string;
     }>();
   const webViewRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
@@ -684,17 +812,17 @@ export default function PlayerScreen() {
     // Orientation already locked to LANDSCAPE before navigating here.
     // Only need to unlock when leaving.
     if (Platform.OS === 'android') {
-      NavigationBar.setVisibilityAsync('hidden').catch(() => {});
-      NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
+      NavigationBar.setVisibilityAsync('hidden').catch(() => { });
+      NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => { });
     }
     return () => {
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const SO = require('expo-screen-orientation');
-        SO.lockAsync(SO.OrientationLock.PORTRAIT_UP).catch(() => {});
-      } catch (_) {}
+        SO.lockAsync(SO.OrientationLock.PORTRAIT_UP).catch(() => { });
+      } catch (_) { }
       if (Platform.OS === 'android') {
-        NavigationBar.setVisibilityAsync('visible').catch(() => {});
+        NavigationBar.setVisibilityAsync('visible').catch(() => { });
       }
     };
   }, []);
@@ -715,9 +843,13 @@ export default function PlayerScreen() {
     try { return JSON.parse(raw) as _SrvItem[]; } catch { return [] as _SrvItem[]; }
   })();
   const safeSrvIdx = safeServersData.findIndex((s) => s.name === safeServerLabel);
+  const safeSubApiUrl = Array.isArray(subApiUrl) ? subApiUrl[0] : (subApiUrl ?? '');
 
-  const htmlContent = buildPlayerHtml(safeUrl, safeTitle, safeEpisode, safeInitialTime, safeServersData, safeSrvIdx >= 0 ? safeSrvIdx : 0);
-
+  const htmlContent = buildPlayerHtml(
+    safeUrl, safeTitle, safeEpisode, safeInitialTime,
+    safeServersData, safeSrvIdx >= 0 ? safeSrvIdx : 0,
+    safeSubApiUrl  // ← THÊM
+  );
   const currentEpisodeRef = useRef(safeEpisode);
   const currentServerRef = useRef(safeServerLabel);
 
@@ -743,9 +875,9 @@ export default function PlayerScreen() {
             serverLabel: currentServerRef.current,
             time: msg.time,
             duration: msg.duration,
-          }, userId).catch(() => {});
+          }, userId).catch(() => { });
         }
-      } catch {}
+      } catch { }
     },
     [safeMovieId, safeMovieSlug, safeTitle, safePoster, userId]
   );
