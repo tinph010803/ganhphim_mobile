@@ -8,7 +8,89 @@ import * as NavigationBar from 'expo-navigation-bar';
 
 type _SrvEp = { name: string; link_embed: string; link_m3u8: string };
 type _SrvItem = { name: string; episodes: _SrvEp[] };
+// Thêm hàm này TRƯỚC buildPlayerHtml
+function buildEmbedHtml(embedUrl: string, title: string, episode: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+/* Overlay trong suốt để bắt touch, nằm trên iframe */
+#touch-overlay{
+  position:fixed;inset:0;z-index:100;
+  background:transparent;
+}
+#btn-back{
+  position:fixed;top:14px;left:12px;z-index:9999;
+  background:rgba(0,0,0,0.55);border:none;color:#fff;
+  width:42px;height:42px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  opacity:0;
+  transition:opacity 0.3s ease;
+  pointer-events:all;
+}
+#btn-back.show{opacity:1;}
+#btn-back:active{background:rgba(255,255,255,.2)}
+</style>
+</head>
+<body>
+<div id="touch-overlay"></div>
+<button id="btn-back">
+  <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+  </svg>
+</button>
+<iframe 
+  src="${embedUrl}"
+  allowfullscreen
+  allow="autoplay; fullscreen; encrypted-media"
+  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+></iframe>
+<script>
+var backBtn = document.getElementById('btn-back');
+var overlay = document.getElementById('touch-overlay');
+var hideTimer = null;
 
+function showBack() {
+  backBtn.classList.add('show');
+  // Ẩn overlay để touch truyền xuống iframe
+  overlay.style.display = 'none';
+  if (hideTimer) clearTimeout(hideTimer);
+  hideTimer = setTimeout(function() {
+    backBtn.classList.remove('show');
+    // Hiện overlay lại để bắt touch tiếp theo
+    overlay.style.display = 'block';
+  }, 5000);
+}
+
+// Lần đầu: hiện ngay 5s rồi ẩn
+showBack();
+
+// Bắt touch qua overlay
+overlay.addEventListener('click', function() {
+  showBack();
+});
+
+backBtn.addEventListener('click', function() {
+  if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage('back');
+});
+</script>
+</body>
+</html>`;
+}
+
+function isEmbedUrl(url: string): boolean {
+  // Các domain embed phổ biến
+  return url.includes('playembed') || url.includes('embed') ||
+    url.startsWith('https://player') ||
+    (!url.includes('.m3u8') && !url.includes('.mp4') &&
+      !url.includes('fbcdn') && !url.includes('cdninstagram') &&
+      url.startsWith('http'));
+}
 function buildPlayerHtml(m3u8Url: string, title: string, episode: string, initialTime = 0, serversData: _SrvItem[] = [], initSrvIdx = 0, subApiUrl = ''): string {
   const safeUrl = JSON.stringify(m3u8Url);
   const safeTitle = JSON.stringify(title);
@@ -845,11 +927,14 @@ export default function PlayerScreen() {
   const safeSrvIdx = safeServersData.findIndex((s) => s.name === safeServerLabel);
   const safeSubApiUrl = Array.isArray(subApiUrl) ? subApiUrl[0] : (subApiUrl ?? '');
 
-  const htmlContent = buildPlayerHtml(
-    safeUrl, safeTitle, safeEpisode, safeInitialTime,
-    safeServersData, safeSrvIdx >= 0 ? safeSrvIdx : 0,
-    safeSubApiUrl  // ← THÊM
-  );
+  const isEmbed = isEmbedUrl(safeUrl);
+  const htmlContent = isEmbed
+    ? buildEmbedHtml(safeUrl, safeTitle, safeEpisode)
+    : buildPlayerHtml(
+      safeUrl, safeTitle, safeEpisode, safeInitialTime,
+      safeServersData, safeSrvIdx >= 0 ? safeSrvIdx : 0,
+      safeSubApiUrl
+    );
   const currentEpisodeRef = useRef(safeEpisode);
   const currentServerRef = useRef(safeServerLabel);
 
