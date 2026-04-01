@@ -92,7 +92,7 @@ export default function HTMoviesScreen() {
               <View style={styles.vipBadge}>
                 <Text style={styles.vipText}>VIP</Text>
               </View>
-              <MovieCard movie={item} width={CARD_WIDTH} />
+              <MovieCard movie={item} width={CARD_WIDTH} hideEpisodeBadges />
             </View>
           )}
           ListEmptyComponent={

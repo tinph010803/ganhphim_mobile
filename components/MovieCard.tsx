@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 interface MovieCardProps {
   movie: Movie;
   width?: number;
+  hideEpisodeBadges?: boolean;
 }
 
 const LT_PATTERN = /lồng tiếng|lồng\s*tiếng|long\s*tieng|dubbed/i;
@@ -17,7 +18,11 @@ const parseEpisodeNumber = (value?: string | number): number => {
   return match ? Number(match[0]) : 0;
 };
 
-export const MovieCard = memo(function MovieCard({ movie, width = 150 }: MovieCardProps) {
+export const MovieCard = memo(function MovieCard({
+  movie,
+  width = 150,
+  hideEpisodeBadges = false,
+}: MovieCardProps) {
   const router = useRouter();
 
   const handlePress = useCallback(() => {
@@ -90,12 +95,12 @@ export const MovieCard = memo(function MovieCard({ movie, width = 150 }: MovieCa
             </View>
           ) : (
             <>
-              {hasAltAudio && (
+              {!hideEpisodeBadges && hasAltAudio && (
                 <View style={[styles.badge, styles.ltBadge]}>
                   <Text style={styles.badgeText}>{dubbedText}</Text>
                 </View>
               )}
-              {(hasSubbed || !hasAltAudio) && (
+              {!hideEpisodeBadges && (hasSubbed || !hasAltAudio) && (
                 <View style={[styles.badge, styles.episodeBadge]}>
                   <Text style={styles.badgeText}>{subbedText}</Text>
                 </View>
@@ -103,7 +108,7 @@ export const MovieCard = memo(function MovieCard({ movie, width = 150 }: MovieCa
             </>
           )}
         </View>
-        {!isTrailer && movie.is_series && movie.current_episode < movie.episodes && (
+        {!hideEpisodeBadges && !isTrailer && movie.is_series && movie.current_episode < movie.episodes && (
           <View style={[styles.statusBadge, styles.updatingBadge]}>
             <Text style={styles.statusText}>TM.{movie.current_episode}</Text>
           </View>

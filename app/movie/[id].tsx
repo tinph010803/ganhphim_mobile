@@ -54,7 +54,7 @@ function isUuid(value: string): boolean {
 }
 
 function stripProviderTag(serverName: string): string {
-  return serverName.replace(/\s*\[(KK|HT)\]\s*/gi, '').trim();
+  return serverName.replace(/\s*\[(KK|NC|HT)\]\s*/gi, '').trim();
 }
 function toSlug(str: string): string {
   return str
@@ -66,8 +66,9 @@ function toSlug(str: string): string {
     .trim()
     .replace(/\s+/g, '-');
 }
-function detectProvider(serverName: string): 'OP' | 'KK' | 'HT' {
+function detectProvider(serverName: string): 'OP' | 'KK' | 'NC' | 'HT' {
   if (/\[HT\]/i.test(serverName)) return 'HT';
+  if (/\[NC\]/i.test(serverName)) return 'NC';
   if (/\[KK\]/i.test(serverName)) return 'KK';
   return 'OP';
 }
@@ -89,7 +90,7 @@ function detectAudioType(serverName: string): 'vietsub' | 'thuyet-minh' | 'defau
 type ServerMachine = {
   key: string;
   label: string;
-  provider: 'OP' | 'KK' | 'HT';
+  provider: 'OP' | 'KK' | 'NC' | 'HT';
   serverIndexes: number[];
 };
 export default function MovieDetailScreen() {
@@ -131,18 +132,18 @@ export default function MovieDetailScreen() {
     time: string | null;
     episodes: string[];
   } | null>(null);
-const [htServers, setHtServers] = useState<any[]>([]);
+  const [htServers, setHtServers] = useState<any[]>([]);
 
-useEffect(() => {
-  if (!movie?.slug) return;
-  supabase
-    .from('ht_servers')
-    .select('*')
-    .eq('movie_slug', movie.slug)
-    .then(({ data }) => {
-      if (data && data.length > 0) setHtServers(data);
-    });
-}, [movie?.slug]);
+  useEffect(() => {
+    if (!movie?.slug) return;
+    supabase
+      .from('ht_servers')
+      .select('*')
+      .eq('movie_slug', movie.slug)
+      .then(({ data }) => {
+        if (data && data.length > 0) setHtServers(data);
+      });
+  }, [movie?.slug]);
 
   // Khi quay về từ player, reset
   useFocusEffect(useCallback(() => { setPlayerParams(null); }, []));
@@ -279,37 +280,37 @@ useEffect(() => {
   // );
 
   // ADD FIM THỎ ƠI
- const movieServers = useMemo(() => {
-  const base = (movie?.servers?.length ?? 0) > 0
-    ? movie!.servers!
-    : [{ name: 'CAM FULL #1', episodes: movie?.episodes_data ?? [] }];
+  const movieServers = useMemo(() => {
+    const base = (movie?.servers?.length ?? 0) > 0
+      ? movie!.servers!
+      : [{ name: 'CAM FULL #1', episodes: movie?.episodes_data ?? [] }];
 
-  if (htServers.length === 0) return base;
+    if (htServers.length === 0) return base;
 
-  // Group các episode theo server_name
-  const grouped = new Map<string, any[]>();
-  for (const row of htServers) {
-    if (!grouped.has(row.server_name)) grouped.set(row.server_name, []);
-    grouped.get(row.server_name)!.push({
-      name: row.episode_name,
-      slug: row.episode_slug,
-      filename: '',
-      link_embed: row.link_embed ?? '',
-      link_m3u8: row.link_m3u8 ?? '',
-    });
-  }
+    // Group các episode theo server_name
+    const grouped = new Map<string, any[]>();
+    for (const row of htServers) {
+      if (!grouped.has(row.server_name)) grouped.set(row.server_name, []);
+      grouped.get(row.server_name)!.push({
+        name: row.episode_name,
+        slug: row.episode_slug,
+        filename: '',
+        link_embed: row.link_embed ?? '',
+        link_m3u8: row.link_m3u8 ?? '',
+      });
+    }
 
-  const htServerList = Array.from(grouped.entries()).map(([name, episodes]) => ({
-    name,
-    episodes,
-  }));
+    const htServerList = Array.from(grouped.entries()).map(([name, episodes]) => ({
+      name,
+      episodes,
+    }));
 
-  return [...base, ...htServerList];
-}, [movie, htServers]);
+    return [...base, ...htServerList];
+  }, [movie, htServers]);
 
   // End
   const serverMachines = useMemo<ServerMachine[]>(() => {
-    const grouped = new Map<string, { provider: 'OP' | 'KK' | 'HT'; serverIndexes: number[] }>();
+    const grouped = new Map<string, { provider: 'OP' | 'KK' | 'NC' | 'HT'; serverIndexes: number[] }>();
 
     movieServers.forEach((srv, index) => {
       const provider = detectProvider(srv.name || '');
@@ -356,7 +357,10 @@ useEffect(() => {
       if (targetServer && srv.name !== targetServer) continue;
       for (const ep of srv.episodes) {
         if (ep.name === targetEpisode) {
-          targetUrl = ep.link_m3u8 || ep.link_embed;
+          const preferEmbed = /\[(NC|HT)\]/i.test(srv.name || '');
+          targetUrl = preferEmbed
+            ? (ep.link_embed || ep.link_m3u8)
+            : (ep.link_m3u8 || ep.link_embed);
           targetServer = srv.name;
           break outer;
         }
@@ -365,7 +369,10 @@ useEffect(() => {
     // Fallback: first episode if nothing matched
     if (!targetUrl) {
       const firstSrv = servers[0];
-      targetUrl = firstSrv?.episodes?.[0]?.link_m3u8 || firstSrv?.episodes?.[0]?.link_embed || movie.stream_url || '';
+      const preferEmbed = /\[(NC|HT)\]/i.test(firstSrv?.name || '');
+      targetUrl = preferEmbed
+        ? (firstSrv?.episodes?.[0]?.link_embed || firstSrv?.episodes?.[0]?.link_m3u8 || movie.stream_url || '')
+        : (firstSrv?.episodes?.[0]?.link_m3u8 || firstSrv?.episodes?.[0]?.link_embed || movie.stream_url || '');
       targetEpisode = firstSrv?.episodes?.[0]?.name ?? '';
       targetServer = firstSrv?.name ?? '';
     }
@@ -397,7 +404,7 @@ useEffect(() => {
           const y = d.getFullYear();
           const m = String(d.getMonth() + 1).padStart(2, '0');
           const day = String(d.getDate()).padStart(2, '0');
-          return fetch(`https://rophimm.me/baseapi/api/v1/showtimes/by-date/${y}-${m}-${day}`)
+          return fetch(`https://rophimm.info/baseapi/api/v1/showtimes/by-date/${y}-${m}-${day}`)
             .then((r) => (r.ok ? r.json() : []))
             .catch(() => []);
         })
@@ -460,47 +467,51 @@ useEffect(() => {
     } catch { }
   };
 
-const openPlayer = (url: string, episodeName?: string, srvLabel?: string, startTime?: number, embedUrl?: string) => {
+  const openPlayer = (url: string, episodeName?: string, srvLabel?: string, startTime?: number, embedUrl?: string) => {
     console.log('openPlayer called:', { url, embedUrl, srvLabel }); // ← thêm dòng này
 
-  if (!url && !embedUrl) return;
-  
-  const isHT = srvLabel?.includes('[HT]') ?? false;
-  
-  let finalUrl = url;
-  if (isHT && embedUrl) {
-    finalUrl = embedUrl;
-     console.log('finalUrl:', finalUrl);
-  } else if (isHT) {
-    // fallback: tìm embed từ movieServers nếu không truyền trực tiếp
-    for (const srv of movieServers) {
-      if (!srv.name?.includes('[HT]')) continue;
-      const ep = srv.episodes?.find(e => 
-        e.name === episodeName || e.link_m3u8 === url || e.link_embed === url
-      );
-      if (ep?.link_embed) {
-        finalUrl = ep.link_embed;
-        break;
+    if (!url && !embedUrl) return;
+
+    const isHT = srvLabel?.includes('[HT]') ?? false;
+    const isNC = srvLabel?.includes('[NC]') ?? false;
+    const shouldPreferEmbed = isHT || isNC;
+
+    let finalUrl = url;
+    if (shouldPreferEmbed && embedUrl) {
+      finalUrl = embedUrl;
+      console.log('finalUrl:', finalUrl);
+    } else if (shouldPreferEmbed) {
+      // fallback: tìm embed từ movieServers nếu không truyền trực tiếp
+      for (const srv of movieServers) {
+        if (!srv.name) continue;
+        if (isHT && !srv.name.includes('[HT]')) continue;
+        if (isNC && !srv.name.includes('[NC]')) continue;
+        const ep = srv.episodes?.find(e =>
+          e.name === episodeName || e.link_m3u8 === url || e.link_embed === url
+        );
+        if (ep?.link_embed) {
+          finalUrl = ep.link_embed;
+          break;
+        }
       }
     }
-  }
 
-  const srvData = (movie?.servers?.length ?? 0) > 0
-    ? movie!.servers!
-    : (movie?.episodes_data ? [{ name: srvLabel || 'Vietsub #1', episodes: movie.episodes_data }] : []);
+    const srvData = (movie?.servers?.length ?? 0) > 0
+      ? movie!.servers!
+      : (movie?.episodes_data ? [{ name: srvLabel || 'Vietsub #1', episodes: movie.episodes_data }] : []);
 
-  setPlayerParams({
-    url: finalUrl,
-    title: movie?.title ?? '',
-    episode: episodeName ?? '',
-    movieId: gtavnMovieIdRef.current ?? id ?? '',
-    movieSlug: id ?? '',
-    serverLabel: srvLabel ?? '',
-    poster: movie?.thumb_url ?? '',
-    servers: JSON.stringify(srvData),
-    ...(startTime && startTime > 0 ? { initialTime: String(Math.floor(startTime)) } : {}),
-  });
-};
+    setPlayerParams({
+      url: finalUrl,
+      title: movie?.title ?? '',
+      episode: episodeName ?? '',
+      movieId: gtavnMovieIdRef.current ?? id ?? '',
+      movieSlug: id ?? '',
+      serverLabel: srvLabel ?? '',
+      poster: movie?.thumb_url ?? '',
+      servers: JSON.stringify(srvData),
+      ...(startTime && startTime > 0 ? { initialTime: String(Math.floor(startTime)) } : {}),
+    });
+  };
 
   const toggleFavorite = async () => {
     if (!user) {
@@ -549,7 +560,12 @@ const openPlayer = (url: string, episodeName?: string, srvLabel?: string, startT
     );
   }
 
-  const firstEpisodeUrl = movie.episodes_data?.[0]?.link_m3u8 || movie.stream_url || '';
+  const firstServerName = movie.servers?.[0]?.name ?? '';
+  const firstEpisode = movie.episodes_data?.[0];
+  const firstEpisodePreferEmbed = /\[(NC|HT)\]/i.test(firstServerName);
+  const firstEpisodeUrl = firstEpisodePreferEmbed
+    ? (firstEpisode?.link_embed || firstEpisode?.link_m3u8 || movie.stream_url || '')
+    : (firstEpisode?.link_m3u8 || firstEpisode?.link_embed || movie.stream_url || '');
   const firstEpisodeName = movie.episodes_data?.[0]?.name || '';
 
   return (
@@ -829,9 +845,11 @@ const openPlayer = (url: string, episodeName?: string, srvLabel?: string, startT
 
 
                 {/* Thông báo cho server KK - Text đơn giản */}
-                {selectedMachine?.provider === 'KK' && (
+                {(selectedMachine?.provider === 'KK' || selectedMachine?.provider === 'NC') && (
                   <Text style={styles.kkWarningText}>
-                    ⚠️ KK có quảng cáo giữa phim (15p,...). Shop sẽ khắc phục sớm. Mong thông cảm!
+                    {selectedMachine?.provider === 'KK'
+                      ? '⚠️ KK có quảng cáo giữa phim (15p,...). Shop sẽ khắc phục sớm. Mong thông cảm!'
+                      : '⚠️ NC có quảng cáo mặc định lúc ~2 phút đầu video. Mong bạn thông cảm!'}
                   </Text>
                 )}
 

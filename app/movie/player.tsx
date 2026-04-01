@@ -938,6 +938,24 @@ export default function PlayerScreen() {
   const currentEpisodeRef = useRef(safeEpisode);
   const currentServerRef = useRef(safeServerLabel);
 
+  useEffect(() => {
+    // Embed providers (NC/HT) do not expose playback time. Save a history entry once.
+    if (!isEmbed || !safeMovieId || !safeMovieSlug) return;
+    saveWatchProgress(
+      {
+        movieId: safeMovieId,
+        movieSlug: safeMovieSlug,
+        movieTitle: safeTitle,
+        posterUrl: safePoster,
+        episodeName: currentEpisodeRef.current,
+        serverLabel: currentServerRef.current,
+        time: 0,
+        duration: 0,
+      },
+      userId
+    ).catch(() => {});
+  }, [isEmbed, safeMovieId, safeMovieSlug, safeTitle, safePoster, userId]);
+
   const handleMessage = useCallback(
     (event: any) => {
       const data = event.nativeEvent.data;
@@ -950,6 +968,18 @@ export default function PlayerScreen() {
         if (msg.type === 'episodeChange') {
           if (msg.episode) currentEpisodeRef.current = msg.episode;
           if (msg.serverLabel) currentServerRef.current = msg.serverLabel;
+          if (isEmbed && safeMovieId && safeMovieSlug) {
+            saveWatchProgress({
+              movieId: safeMovieId,
+              movieSlug: safeMovieSlug,
+              movieTitle: safeTitle,
+              posterUrl: safePoster,
+              episodeName: currentEpisodeRef.current,
+              serverLabel: currentServerRef.current,
+              time: 0,
+              duration: 0,
+            }, userId).catch(() => { });
+          }
         } else if (msg.type === 'progress' && safeMovieId && safeMovieSlug) {
           saveWatchProgress({
             movieId: safeMovieId,
@@ -964,7 +994,7 @@ export default function PlayerScreen() {
         }
       } catch { }
     },
-    [safeMovieId, safeMovieSlug, safeTitle, safePoster, userId]
+    [isEmbed, safeMovieId, safeMovieSlug, safeTitle, safePoster, userId]
   );
 
   return (

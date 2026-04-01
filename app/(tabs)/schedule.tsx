@@ -14,7 +14,7 @@ import { Calendar, ChevronLeft, PackageOpen } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
 
-const ROPHIM_API = 'https://rophimm.me/baseapi/api/v1';
+const ROPHIM_API = 'https://rophimm.info/baseapi/api/v1';
 const WINDOW_SIZE = 15;
 const DAY_NAMES = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 

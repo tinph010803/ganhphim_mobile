@@ -89,6 +89,7 @@ export default function WatchHistoryScreen() {
   };
 
   function renderItem({ item }: { item: WatchHistoryEntry }) {
+    const isEmbedHistory = /\[(NC|HT)\]/i.test(item.serverLabel || '');
     const pct = progressPct(item);
     const isFinished = pct >= 0.95;
 
@@ -111,17 +112,19 @@ export default function WatchHistoryScreen() {
             </View>
           )}
           {/* Progress bar */}
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${(pct * 100).toFixed(0)}%` as any,
-                  backgroundColor: isFinished ? Colors.primary : '#e53e3e',
-                },
-              ]}
-            />
-          </View>
+          {!isEmbedHistory && (
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${(pct * 100).toFixed(0)}%` as any,
+                    backgroundColor: isFinished ? Colors.primary : '#e53e3e',
+                  },
+                ]}
+              />
+            </View>
+          )}
           {/* Play overlay */}
           <View style={styles.playOverlay} pointerEvents="none">
             <Play size={18} fill="#fff" color="#fff" />
@@ -140,9 +143,11 @@ export default function WatchHistoryScreen() {
               : 'Tập 1'}
             {item.serverLabel ? ` • ${item.serverLabel}` : ''}
           </Text>
-          <Text style={styles.timeInfo}>
-            {formatTime(item.time)} / {formatTime(item.duration)}
-          </Text>
+          {!isEmbedHistory && (
+            <Text style={styles.timeInfo}>
+              {formatTime(item.time)} / {formatTime(item.duration)}
+            </Text>
+          )}
           <Text style={styles.timeAgo}>{timeAgo(item.updatedAt)}</Text>
         </View>
 
