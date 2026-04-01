@@ -238,6 +238,17 @@ function OverrideCard({
             <Image source={{ uri: item.titleImg }} style={[card.preview, { height: 60 }]} resizeMode="contain" />
           )}
 
+          {/* Trailer URL (optional) */}
+          <Text style={card.label}>Link trailer (tuỳ chọn)</Text>
+          <TextInput
+            style={card.input}
+            value={item.trailerUrl ?? ''}
+            onChangeText={(v) => set('trailerUrl', v)}
+            placeholder="https://youtube.com/... hoặc https://..."
+            placeholderTextColor={Colors.textSecondary}
+            autoCapitalize="none"
+          />
+
           {/* Numeric sliders */}
           <Text style={card.sectionLabel}>Tùy chỉnh ảnh nhân vật</Text>
 

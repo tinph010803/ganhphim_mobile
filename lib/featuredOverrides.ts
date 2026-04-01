@@ -13,6 +13,7 @@ export interface FeaturedOverride {
   bg?: string;
   character?: string;
   titleImg?: string;
+  trailerUrl?: string;
   /** Tỷ lệ width ảnh nhân vật so với màn hình (0–1), mặc định 0.60 */
   charW?: number;
   /** Tỷ lệ height ảnh nhân vật so với banner (0–1.5), mặc định 1.1 */
@@ -23,7 +24,7 @@ export interface FeaturedOverride {
   charBottom?: number;
 }
 
-const CACHE_KEY = 'featured_overrides_cache_v1';
+const CACHE_KEY = 'featured_overrides_cache_v2';
 
 /** Dữ liệu mặc định — fallback khi Supabase và cache đều không có */
 const DEFAULT_OVERRIDES: FeaturedOverride[] = [
@@ -62,6 +63,7 @@ function rowToOverride(row: any): FeaturedOverride {
     bg: row.bg ?? undefined,
     character: row.character_url ?? undefined,
     titleImg: row.title_img ?? undefined,
+    trailerUrl: row.trailer_url ?? undefined,
     charW: row.char_w ?? undefined,
     charH: row.char_h ?? undefined,
     charRight: row.char_right ?? undefined,
@@ -109,6 +111,7 @@ export async function saveFeaturedOverrides(list: FeaturedOverride[]): Promise<v
     bg: o.bg ?? null,
     character_url: o.character ?? null,
     title_img: o.titleImg ?? null,
+    trailer_url: o.trailerUrl ?? null,
     char_w: o.charW ?? null,
     char_h: o.charH ?? null,
     char_right: o.charRight ?? null,
@@ -147,6 +150,7 @@ export async function resetFeaturedOverrides(): Promise<void> {
     bg: o.bg ?? null,
     character_url: o.character ?? null,
     title_img: o.titleImg ?? null,
+    trailer_url: o.trailerUrl ?? null,
     char_w: o.charW ?? null,
     char_h: o.charH ?? null,
     char_right: o.charRight ?? null,
