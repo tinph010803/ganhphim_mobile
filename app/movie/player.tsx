@@ -23,6 +23,7 @@ iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
 #touch-overlay{
   position:fixed;inset:0;z-index:100;
   background:transparent;
+  pointer-events: none;
 }
 #btn-back{
   position:fixed;top:14px;left:12px;z-index:9999;
@@ -57,13 +58,11 @@ var hideTimer = null;
 
 function showBack() {
   backBtn.classList.add('show');
-  // Ẩn overlay để touch truyền xuống iframe
-  overlay.style.display = 'none';
+  overlay.style.pointerEvents = 'none'; // nhả touch cho iframe
   if (hideTimer) clearTimeout(hideTimer);
   hideTimer = setTimeout(function() {
     backBtn.classList.remove('show');
-    // Hiện overlay lại để bắt touch tiếp theo
-    overlay.style.display = 'block';
+    overlay.style.pointerEvents = 'all'; // bắt touch lại
   }, 5000);
 }
 
@@ -163,10 +162,9 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 /* Double-tap feedback */
 .dtfb{position:absolute;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;opacity:0;transition:opacity .18s}
 .dtfb.show{opacity:1}
-#dtfb-l{left:6%}#dtfb-r{right:6%}
-.dtfb-circle{width:70px;height:70px;border-radius:50%;border:2px solid rgba(255,255,255,.5);animation:rp .4s ease-out}
-.dtfb-label{font-size:11px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7);white-space:nowrap}
-@keyframes rp{from{transform:scale(.5);opacity:.8}to{transform:scale(1.3);opacity:0}}
+#dtfb-l{left:15%}#dtfb-r{right:15%}
+.dtfb-icon{width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
+.dtfb-label{font-size:13px;font-weight:600;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8);white-space:nowrap}
 /* Settings panel */
 #smenu{position:absolute;top:60px;right:14px;background:rgba(20,20,20,.97);border-radius:10px;min-width:200px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.7);display:none;z-index:50;animation:sm-in .15s ease}
 #smenu.open{display:block}
@@ -206,8 +204,24 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 <div id="wrap">
   <video id="v" playsinline preload="auto"></video>
   <div id="spin-wrap"><div id="spinner"></div></div>
-  <div class="dtfb" id="dtfb-l"><div class="dtfb-circle"></div><div class="dtfb-label"></div></div>
-  <div class="dtfb" id="dtfb-r"><div class="dtfb-circle"></div><div class="dtfb-label"></div></div>
+<div class="dtfb" id="dtfb-l">
+  <div class="dtfb-icon">
+    <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="11 17 6 12 11 7"/>
+      <polyline points="18 17 13 12 18 7"/>
+    </svg>
+  </div>
+  <div class="dtfb-label"></div>
+</div>
+<div class="dtfb" id="dtfb-r">
+  <div class="dtfb-icon">
+    <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="13 17 18 12 13 7"/>
+      <polyline points="6 17 11 12 6 7"/>
+    </svg>
+  </div>
+  <div class="dtfb-label"></div>
+</div>
   <button id="btn-skip">B&#x1ECF; qua gi&#x1EDB;i thi&#x1EC7;u</button>
   <button id="btn-lock2" style="display:none">
     <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/></svg>
@@ -356,6 +370,7 @@ function p(n){return n<10?'0'+n:''+n;}
 function spdLabel(s){return s+'x';}
 
 // HLS
+
 function initHls(){
     if(hls){hls.destroy();hls=null;}
   spin.classList.add('show');
@@ -463,9 +478,9 @@ wrap.addEventListener('click',function(e){
   var side=x<w*.32?'l':x>w*.68?'r':'m';
   if(dtTimer&&dtSide===side&&side!=='m'){
     clearTimeout(dtTimer);dtTimer=null;
-    if(side==='l'){v.currentTime=Math.max(0,v.currentTime-10);showDtFb(dtfbL,'\u22ea 10 gi\u00e2y');}
-    else{v.currentTime=Math.min(dur||99999,v.currentTime+10);showDtFb(dtfbR,'10 gi\u00e2y \u22eb');}
-    showCtrl();
+if(side==='l'){v.currentTime=Math.max(0,v.currentTime-10);showDtFb(dtfbL,'-10 gi\u00e2y');}
+    else{v.currentTime=Math.min(dur||99999,v.currentTime+10);showDtFb(dtfbR,'+10 gi\u00e2y');}
+    // không gọi showCtrl() ở đây
   }else{
     dtSide=side;
     dtTimer=setTimeout(function(){dtTimer=null;toggleCtrl();},220);
@@ -953,7 +968,7 @@ export default function PlayerScreen() {
         duration: 0,
       },
       userId
-    ).catch(() => {});
+    ).catch(() => { });
   }, [isEmbed, safeMovieId, safeMovieSlug, safeTitle, safePoster, userId]);
 
   const handleMessage = useCallback(
