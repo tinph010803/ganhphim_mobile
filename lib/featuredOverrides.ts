@@ -1,12 +1,11 @@
 /**
- * Featured Overrides — quản lý danh sách phim nổi bật
- * - Nguồn chính: Supabase (bảng `featured_overrides`)
- * - Cache offline: AsyncStorage (dùng khi không có mạng)
- * - Fallback cuối: dữ liệu mặc định hardcode
+ * Featured Overrides — danh sách phim nổi bật hardcode
+ * - Không gọi Supabase
+ * - Có thể lưu local bằng AsyncStorage nếu cần
+ * - Nguồn mặc định là mảng hardcode bên dưới
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/lib/supabase';
 
 export interface FeaturedOverride {
   slug: string;
@@ -26,23 +25,38 @@ export interface FeaturedOverride {
 
 const CACHE_KEY = 'featured_overrides_cache_v2';
 
-/** Dữ liệu mặc định — fallback khi Supabase và cache đều không có */
-const DEFAULT_OVERRIDES: FeaturedOverride[] = [
+/** Dữ liệu mặc định — hardcode theo sort_order */
+export const FEATURED_OVERRIDES: FeaturedOverride[] = [
+  {
+    slug: 'nguyet-lan-y-ky',
+    titleImg: 'https://sf-static.onflixcdn.pics/images/pic/1775038312_url.png',
+    trailerUrl: 'https://res.cloudinary.com/df2amyjzw/video/upload/sp_auto/v1775190197/nguyetlanyky_mwuhcz.m3u8',
+  },
+  {
+    slug: 'mo-tu-tu',
+    titleImg: 'https://sf-static.onflixcdn.pics/images/pic/1774685404_url.webp',
+    trailerUrl: 'https://res.cloudinary.com/df2amyjzw/video/upload/sp_auto/v1775011804/motutu_wpe4k3.m3u8',
+  },
+  {
+    slug: 'xin-chao-1983',
+    bg: 'https://sf-static.onflixcdn.pics/images/pic/1773748924_url.webp',
+    character: 'https://sf-static.onflixcdn.pics/images/pic/1773748635_url.webp',
+    titleImg: 'https://sf-static.onflixcdn.pics/images/pic/1773748957_url.webp',
+    charH: 0.72,
+    charBottom: 0,
+  },
+  {
+    slug: 'truc-ngoc',
+    bg: 'https://pics.ibytecdn.org/images/pic/1772791752_url.webp',
+    character: 'https://pics.ibytecdn.org/images/pic/1772791880_url.webp',
+    titleImg: 'https://pics.ibytecdn.org/images/pic/1772791902_url.webp',
+    charH: 0.72,
+  },
   {
     slug: 'nghe-thuat-lua-doi-cua-sarah',
     bg: 'https://sf-static.onflixcdn.pics/images/pic/1771002086_bg_%20Sarah_onflix.webp',
     character: 'https://sf-static.onflixcdn.pics/images/pic/1770999672_Sarah_onflix.webp',
     titleImg: 'https://sf-static.onflixcdn.pics/images/pic/1770999603_url.webp',
-  },
-  {
-    slug: 'bui-hoa-hong',
-    bg: 'https://pics.ibytecdn.org/images/pic/1772315778_bg-bui-hoa-hong.webp',
-    character: 'https://pics.ibytecdn.org/images/pic/1772316152_bui-hoa-hong-onflix.webp',
-    titleImg: 'https://pics.ibytecdn.org/images/pic/1772315871_url.webp',
-    charW: 0.72,
-    charH: 1.05,
-    charRight: -20,
-    charBottom: 0,
   },
   {
     slug: 'tieng-yeu-nay-anh-dich-duoc-khong',
@@ -56,41 +70,33 @@ const DEFAULT_OVERRIDES: FeaturedOverride[] = [
   },
 ];
 
-/** Map row Supabase → FeaturedOverride */
-function rowToOverride(row: any): FeaturedOverride {
-  return {
-    slug: row.slug,
-    bg: row.bg ?? undefined,
-    character: row.character_url ?? undefined,
-    titleImg: row.title_img ?? undefined,
-    trailerUrl: row.trailer_url ?? undefined,
-    charW: row.char_w ?? undefined,
-    charH: row.char_h ?? undefined,
-    charRight: row.char_right ?? undefined,
-    charBottom: row.char_bottom ?? undefined,
-  };
+/**
+ * Load featured overrides from local cache immediately.
+ * No Supabase call.
+ */
+export async function loadFeaturedOverridesFromCache(): Promise<FeaturedOverride[]> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const parsed: FeaturedOverride[] = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return FEATURED_OVERRIDES;
 }
 
 /**
- * Đọc từ Supabase. Nếu offline/lỗi → dùng AsyncStorage cache.
- * Nếu cache cũng không có → dùng DEFAULT_OVERRIDES.
+ * Refresh featured overrides in background.
+ * Since the source is hardcoded, this just returns the current data.
+ */
+export async function refreshFeaturedOverridesInBackground(): Promise<FeaturedOverride[]> {
+  return loadFeaturedOverrides();
+}
+
+/**
+ * Đọc featured overrides từ local cache, không gọi Supabase.
  */
 export async function loadFeaturedOverrides(): Promise<FeaturedOverride[]> {
-  try {
-    const { data, error } = await supabase
-      .from('featured_overrides')
-      .select('*')
-      .order('sort_order', { ascending: true });
-
-    if (!error && data && data.length > 0) {
-      const list = data.map(rowToOverride);
-      // Cập nhật cache
-      await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(list));
-      return list;
-    }
-  } catch {}
-
-  // Fallback: AsyncStorage cache
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (raw) {
@@ -99,67 +105,21 @@ export async function loadFeaturedOverrides(): Promise<FeaturedOverride[]> {
     }
   } catch {}
 
-  return DEFAULT_OVERRIDES;
+  return FEATURED_OVERRIDES;
 }
 
 /**
- * Lưu lên Supabase (upsert theo slug) và cập nhật cache local.
+ * Lưu local cache theo máy hiện tại.
  */
 export async function saveFeaturedOverrides(list: FeaturedOverride[]): Promise<void> {
-  const rows = list.map((o, i) => ({
-    slug: o.slug,
-    bg: o.bg ?? null,
-    character_url: o.character ?? null,
-    title_img: o.titleImg ?? null,
-    trailer_url: o.trailerUrl ?? null,
-    char_w: o.charW ?? null,
-    char_h: o.charH ?? null,
-    char_right: o.charRight ?? null,
-    char_bottom: o.charBottom ?? null,
-    sort_order: i,
-    updated_at: new Date().toISOString(),
-  }));
-
-  // Xoá các slug cũ không còn trong list, rồi upsert
-  const { error: delError } = await supabase
-    .from('featured_overrides')
-    .delete()
-    .not('slug', 'in', `(${list.map((o) => `"${o.slug}"`).join(',')})`);
-
-  if (delError) throw new Error(delError.message);
-
-  const { error: upsertError } = await supabase
-    .from('featured_overrides')
-    .upsert(rows, { onConflict: 'slug' });
-
-  if (upsertError) throw new Error(upsertError.message);
-
-  // Cập nhật cache local
   await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(list));
 }
 
 /**
- * Reset: xoá toàn bộ trên Supabase, xoá cache, insert lại default.
+ * Reset về danh sách hardcode mặc định.
  */
 export async function resetFeaturedOverrides(): Promise<void> {
-  await supabase.from('featured_overrides').delete().neq('slug', '');
   await AsyncStorage.removeItem(CACHE_KEY);
-
-  const rows = DEFAULT_OVERRIDES.map((o, i) => ({
-    slug: o.slug,
-    bg: o.bg ?? null,
-    character_url: o.character ?? null,
-    title_img: o.titleImg ?? null,
-    trailer_url: o.trailerUrl ?? null,
-    char_w: o.charW ?? null,
-    char_h: o.charH ?? null,
-    char_right: o.charRight ?? null,
-    char_bottom: o.charBottom ?? null,
-    sort_order: i,
-    updated_at: new Date().toISOString(),
-  }));
-
-  await supabase.from('featured_overrides').upsert(rows, { onConflict: 'slug' });
 }
 
 /** Chuyển mảng sang Record để dùng trong FeaturedCarousel */

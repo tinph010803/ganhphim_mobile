@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,18 +7,18 @@ import {
   TouchableOpacity,
   Animated,
   ScrollView,
+  InteractionManager,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
 import { Movie } from '@/types/movie';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { getMovieBySlug } from '@/lib/ophim';
-import {
-  FeaturedOverride,
-  loadFeaturedOverrides,
-  overridesToRecord,
-} from '@/lib/featuredOverrides';
+import { FeaturedOverride, FEATURED_OVERRIDES } from '@/lib/featuredOverrides';
 import { Volume1, VolumeX } from 'lucide-react-native';
+
 const { width: W, height: SCREEN_H } = Dimensions.get('window');
 const BANNER_H = Math.round(Math.min(W * 0.60, SCREEN_H * 0.42));
 
@@ -28,11 +28,6 @@ interface SlideItem {
   ov: Omit<FeaturedOverride, 'slug'>;
 }
 
-/**
- * Convert Cloudinary player embed URL → direct mp4 URL
- * https://player.cloudinary.com/embed/?cloud_name=abc&public_id=xyz
- * → https://res.cloudinary.com/abc/video/upload/xyz.mp4
- */
 function toDirectVideoUrl(raw: string): string {
   const url = raw.trim();
   if (!url) return '';
@@ -41,16 +36,27 @@ function toDirectVideoUrl(raw: string): string {
     if (parsed.hostname === 'player.cloudinary.com') {
       const cloudName = parsed.searchParams.get('cloud_name');
       const publicId = parsed.searchParams.get('public_id');
-      if (cloudName && publicId) {
+      if (cloudName && publicId)
         return `https://res.cloudinary.com/${cloudName}/video/upload/${publicId}.mp4`;
-      }
     }
     if (parsed.hostname === 'res.cloudinary.com') return url;
   } catch { }
   return url;
 }
 
-/** Video trailer dùng expo-av — autoplay, muted, loop */
+function optimizeImageUrl(url: string | undefined, type: 'bg' | 'char' | 'title' = 'bg'): string {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname?.includes('cloudinary.com')) {
+      const sizes = { bg: 'w_800,q_75', char: 'w_600,q_80', title: 'w_400,q_85' };
+      if (!parsed.pathname.includes('/c_'))
+        return url.replace('/upload/', `/upload/${sizes[type]}/`);
+    }
+  } catch { }
+  return url;
+}
+
 const TrailerVideo = memo(function TrailerVideo({
   videoUrl,
   active,
@@ -64,13 +70,17 @@ const TrailerVideo = memo(function TrailerVideo({
 
   useEffect(() => {
     if (!videoRef.current) return;
-    if (active) {
-      videoRef.current.playAsync().catch(() => { });
-    } else {
+    if (active) videoRef.current.playAsync().catch(() => { });
+    else {
       videoRef.current.pauseAsync().catch(() => { });
       videoRef.current.setPositionAsync(0).catch(() => { });
     }
   }, [active]);
+
+  // Sync muted thay đổi ngay lập tức mà không cần re-mount
+  useEffect(() => {
+    videoRef.current?.setIsMutedAsync(muted).catch(() => { });
+  }, [muted]);
 
   return (
     <Video
@@ -89,19 +99,23 @@ const TrailerVideo = memo(function TrailerVideo({
 const BannerSlide = memo(function BannerSlide({
   item,
   active,
+  muted,
+  onToggleMute,
 }: {
   item: SlideItem;
   active: boolean;
+  muted: boolean;
+  onToggleMute: () => void;
 }) {
   const router = useRouter();
   const { slug, movie, ov } = item;
 
   const bgScale = useRef(new Animated.Value(1)).current;
-  const charX = useRef(new Animated.Value(50)).current;
-  const charO = useRef(new Animated.Value(0)).current;
-  const titleO = useRef(new Animated.Value(0)).current;
-  const titleY = useRef(new Animated.Value(10)).current;
-  const [muted, setMuted] = useState(true);
+  const charX   = useRef(new Animated.Value(50)).current;
+  const charO   = useRef(new Animated.Value(0)).current;
+  const titleO  = useRef(new Animated.Value(0)).current;
+  const titleY  = useRef(new Animated.Value(10)).current;
+
   useEffect(() => {
     if (!active) {
       bgScale.setValue(1); charX.setValue(50); charO.setValue(0);
@@ -119,14 +133,12 @@ const BannerSlide = memo(function BannerSlide({
     ]).start();
   }, [active]);
 
-  const clean = (v?: string) => (v && v !== 'EMPTY' ? v : undefined);
-
-  const bgUri = clean(ov.bg) ?? movie?.thumb_url ?? movie?.poster_url;
-  const charUri = clean(ov.character);
-  const titleUri = clean(ov.titleImg);
-
+  const clean    = (v?: string) => (v && v !== 'EMPTY' ? v : undefined);
+  const bgUri    = optimizeImageUrl(clean(ov.bg) ?? movie?.thumb_url ?? movie?.poster_url, 'bg');
+  const charUri  = optimizeImageUrl(clean(ov.character), 'char');
+  const titleUri = optimizeImageUrl(clean(ov.titleImg), 'title');
   const directVideoUrl = ov.trailerUrl ? toDirectVideoUrl(ov.trailerUrl) : '';
-  const hasTrailer = !!directVideoUrl;
+  const hasTrailer     = !!directVideoUrl;
 
   const handlePress = useCallback(() => {
     router.push({ pathname: '/movie/[id]', params: { id: slug } });
@@ -135,10 +147,8 @@ const BannerSlide = memo(function BannerSlide({
   return (
     <TouchableOpacity activeOpacity={0.95} style={styles.slide} onPress={handlePress}>
 
-      {/* ── Nền: video hoặc ảnh ── */}
       {hasTrailer ? (
         <View style={StyleSheet.absoluteFill}>
-          {/* Poster hiện ngay, video đè lên khi load xong */}
           {bgUri && (
             <Animated.Image
               source={{ uri: bgUri }}
@@ -160,7 +170,6 @@ const BannerSlide = memo(function BannerSlide({
         </Animated.View>
       )}
 
-      {/* Gradients */}
       <LinearGradient
         colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.65)']}
         locations={[0, 0.65, 1]}
@@ -175,20 +184,16 @@ const BannerSlide = memo(function BannerSlide({
         end={{ x: 1, y: 0 }}
       />
 
-      {/* Character — chỉ khi không có trailer */}
-      {charUri && !hasTrailer && (
+      {active && charUri && !hasTrailer && (
         <Animated.View
-          style={[
-            styles.character,
-            {
-              width: W * (ov.charW ?? 0.60),
-              height: BANNER_H * (ov.charH ?? 1.1),
-              right: ov.charRight ?? -10,
-              bottom: ov.charBottom ?? 0,
-              opacity: charO,
-              transform: [{ translateX: charX }],
-            },
-          ]}
+          style={[styles.character, {
+            width: W * (ov.charW ?? 0.60),
+            height: BANNER_H * (ov.charH ?? 1.1),
+            right: ov.charRight ?? -10,
+            bottom: ov.charBottom ?? 0,
+            opacity: charO,
+            transform: [{ translateX: charX }],
+          }]}
         >
           <Animated.Image
             source={{ uri: charUri }}
@@ -199,7 +204,6 @@ const BannerSlide = memo(function BannerSlide({
         </Animated.View>
       )}
 
-      {/* Content overlay */}
       <View style={styles.content}>
         {titleUri ? (
           <Animated.Image
@@ -237,45 +241,91 @@ const BannerSlide = memo(function BannerSlide({
           </View>
         )}
       </View>
-      {hasTrailer && (
-        <TouchableOpacity
-          style={styles.muteBtn}
-          onPress={() => setMuted((prev) => !prev)}
-        >
-          {muted ? (
-            <VolumeX size={18} color="#fff" />
-          ) : (
-            <Volume1 size={18} color="#fff" />
-          )}
+
+      {/* Nút mute chỉ render ở slide active có trailer */}
+      {hasTrailer && active && (
+        <TouchableOpacity style={styles.muteBtn} onPress={onToggleMute} hitSlop={12}>
+          {muted
+            ? <VolumeX size={18} color="#fff" />
+            : <Volume1 size={18} color="#fff" />
+          }
         </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
-}, (prev, next) => prev.active === next.active && prev.item === next.item);
+}, (prev, next) =>
+  prev.active === next.active &&
+  prev.item   === next.item   &&
+  prev.muted  === next.muted
+);
 
 export const FeaturedCarousel = memo(function FeaturedCarousel() {
-  const [slides, setSlides] = useState<SlideItem[]>([]);
+  const [slides] = useState<SlideItem[]>(() =>
+    FEATURED_OVERRIDES.map(({ slug, ...ov }) => ({ slug, movie: null, ov }))
+  );
+  const [slideMovies, setSlideMovies] = useState<Record<string, Movie | null>>({});
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
+  // ── Mute state dùng chung, lift lên đây để control toàn carousel ────────
+  const [muted, setMuted] = useState(true);
+  const toggleMute = useCallback(() => setMuted((prev) => !prev), []);
+
+  // Tự tắt tiếng khi app xuống background (kéo notification bar, alt-tab, v.v.)
   useEffect(() => {
-    loadFeaturedOverrides().then(async (list) => {
-      const movies = await Promise.all(
-        list.map(({ slug }) => getMovieBySlug(slug).catch(() => null))
-      );
-      const result: SlideItem[] = list
-        .map(({ slug, ...ov }, i) => ({ slug, movie: movies[i] ?? null, ov }))
-        .filter(({ movie, ov }) => movie !== null || !!ov.trailerUrl);
-      setSlides(result);
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state !== 'active') setMuted(true);
     });
+    return () => sub.remove();
   }, []);
+
+  // Tự tắt tiếng khi chuyển sang tab khác trong app
+  useFocusEffect(
+    useCallback(() => {
+      return () => setMuted(true); // cleanup = màn hình mất focus
+    }, [])
+  );
+  // ─────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    let cancelled = false;
+
+    InteractionManager.runAfterInteractions(() => {
+      FEATURED_OVERRIDES.forEach(({ slug }) => {
+        getMovieBySlug(slug)
+          .then((movie) => {
+            if (cancelled) return;
+            setSlideMovies((prev) => ({ ...prev, [slug]: movie }));
+          })
+          .catch(() => {
+            if (cancelled) return;
+            setSlideMovies((prev) => ({ ...prev, [slug]: null }));
+          });
+      });
+    });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const slidesWithMovies = useMemo(
+    () => slides.map((item) => ({ ...item, movie: slideMovies[item.slug] ?? null })),
+    [slides, slideMovies]
+  );
 
   const handleScroll = useCallback((e: any) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / W);
     setActiveIndex(idx);
   }, []);
 
-  if (slides.length === 0) return null;
+  useEffect(() => {
+    const next = slidesWithMovies[(activeIndex + 1) % slidesWithMovies.length];
+    if (!next) return;
+    [next.ov.bg || next.movie?.thumb_url, next.ov.character, next.ov.titleImg]
+      .filter(Boolean)
+      .forEach((url) => url && require('react-native').Image.prefetch(url).catch(() => {}));
+  }, [activeIndex, slidesWithMovies]);
+
+  if (slidesWithMovies.length === 0) return null;
 
   return (
     <View style={[styles.container, { height: BANNER_H }]}>
@@ -290,21 +340,22 @@ export const FeaturedCarousel = memo(function FeaturedCarousel() {
         disableIntervalMomentum
         bounces={false}
       >
-        {slides.map((item, index) => (
+        {slidesWithMovies.map((item, index) => (
           <BannerSlide
             key={item.slug}
             item={item}
             active={index === activeIndex}
+            muted={muted}
+            onToggleMute={toggleMute}
           />
         ))}
       </ScrollView>
 
       <View style={styles.dots} pointerEvents="none">
-        {slides.map((_, i) => (
+        {slidesWithMovies.map((_, i) => (
           <View key={i} style={[styles.dot, i === activeIndex && styles.dotActive]} />
         ))}
       </View>
-
     </View>
   );
 });
