@@ -89,9 +89,10 @@ export default function WatchHistoryScreen() {
   };
 
   function renderItem({ item }: { item: WatchHistoryEntry }) {
-    const isEmbedHistory = /\[(NC|HT)\]/i.test(item.serverLabel || '');
     const pct = progressPct(item);
     const isFinished = pct >= 0.95;
+    const hasPlayableProgress = item.time > 0 && item.duration > 0;
+    const isEmbedHistory = /\[(NC|HT)\]/i.test(item.serverLabel || '') && !hasPlayableProgress;
 
     return (
       <View style={styles.item}>
@@ -112,7 +113,7 @@ export default function WatchHistoryScreen() {
             </View>
           )}
           {/* Progress bar */}
-          {!isEmbedHistory && (
+          {!isEmbedHistory && hasPlayableProgress && (
             <View style={styles.progressTrack}>
               <View
                 style={[
@@ -143,7 +144,7 @@ export default function WatchHistoryScreen() {
               : 'Tập 1'}
             {item.serverLabel ? ` • ${item.serverLabel}` : ''}
           </Text>
-          {!isEmbedHistory && (
+          {hasPlayableProgress && !isEmbedHistory && (
             <Text style={styles.timeInfo}>
               {formatTime(item.time)} / {formatTime(item.duration)}
             </Text>

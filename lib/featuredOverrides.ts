@@ -28,6 +28,11 @@ const CACHE_KEY = 'featured_overrides_cache_v2';
 /** Dữ liệu mặc định — hardcode theo sort_order */
 export const FEATURED_OVERRIDES: FeaturedOverride[] = [
   {
+    slug: 'gia-thien-movie-vac-quan-tai-chien-vuong-dang',
+    titleImg: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775384927/Gemini_Generated_Image_nyrvnsnyrvnsnyrv_a2iq1v.png',
+    trailerUrl: 'https://res.cloudinary.com/df2amyjzw/video/upload/v1775383928/giathien_movie_accdzl.mp4'
+  },
+  {
     slug: 'nguyet-lan-y-ky',
     titleImg: 'https://sf-static.onflixcdn.pics/images/pic/1775038312_url.png',
     trailerUrl: 'https://res.cloudinary.com/df2amyjzw/video/upload/sp_auto/v1775190197/nguyetlanyky_mwuhcz.m3u8',

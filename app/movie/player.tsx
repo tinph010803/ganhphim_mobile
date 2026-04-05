@@ -166,7 +166,7 @@ background:linear-gradient(to bottom,rgba(0,0,0,.75) 0%,transparent 22%,transpar
 .dtfb-icon{width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center}
 .dtfb-label{font-size:13px;font-weight:600;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8);white-space:nowrap}
 /* Settings panel */
-#smenu{position:absolute;top:60px;right:14px;background:rgba(20,20,20,.97);border-radius:10px;min-width:200px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.7);display:none;z-index:50;animation:sm-in .15s ease}
+#smenu{position:absolute;top:60px;max-height: calc(100vh - 80px);overflow-y: auto;right:14px;background:rgba(20,20,20,.97);border-radius:10px;min-width:200px;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.7);display:none;z-index:50;animation:sm-in .15s ease}
 #smenu.open{display:block}
 @keyframes sm-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 .sm-head{font-size:11px;color:rgba(255,255,255,.4);padding:10px 14px 6px;letter-spacing:.5px;text-transform:uppercase}
@@ -654,6 +654,8 @@ function switchEp(url,epName,srvIdx,resume){
   M=url;
   resumeAt=(resume!=null&&resume>5)?resume:0;
   dur=0;
+  skipExpired=false;       
+  skipBtn.classList.remove('show');
   tCur.textContent='0:00';
   tDur.textContent='0:00';
   pbFill.style.width='0%';
@@ -840,11 +842,23 @@ function buildSpdPage(){
 }
 function buildQlPage(){
   var html='<div class="sm-back" id="sm-back">'+backIco+' Ch\u1ea5t l\u01b0\u1ee3ng</div>';
+  
+  // Tính tổng số options (bao gồm Auto)
+  var totalOpts = 1 + quals.length;
+  var useGrid = totalOpts > 5;
+  
+  if(useGrid){
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;max-height:calc(100vh - 120px);overflow-y:auto;">';
+  }
+  
   html+='<div class="sm-opt'+(curQ===-1?' on':'')+'" data-q="-1">Auto'+(curQ===-1?chk:'')+'</div>';
   quals.forEach(function(q){
     var on=q.id===curQ?' on':'';
     html+='<div class="sm-opt'+on+'" data-q="'+q.id+'">'+q.label+(q.id===curQ?chk:'')+'</div>';
   });
+  
+  if(useGrid) html += '</div>';
+  
   smMain.style.display='none';smSub.innerHTML=html;smSub.style.display='block';
   document.getElementById('sm-back').onclick=function(){buildSmMain();};
   smSub.querySelectorAll('.sm-opt').forEach(function(el){
@@ -856,7 +870,7 @@ function buildQlPage(){
       buildSmMain();
     };
   });
-}
+} 
 buildSmMain();
 document.getElementById('btn-set').addEventListener('click',function(e){
   e.stopPropagation();smenu.classList.toggle('open');

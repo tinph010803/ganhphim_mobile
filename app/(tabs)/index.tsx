@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
   View,
@@ -11,7 +10,6 @@ import {
   ScrollView,
   Modal,
   Pressable,
-  InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -190,49 +188,6 @@ const SECTION_CONFIGS: SectionConfig[] = [
   { key: 'theater', title: 'Phim Điện Ảnh Mới Coóng', fetchFn: () => getMoviesByType('phim-le'), navSlug: 'phim-le', navType: 'list' },
 ];
 
-// Cache helper functions
-const CACHE_KEYS = {
-  featured: 'home_featured_cache',
-  top10: 'home_top10_cache',
-  sections: 'home_sections_cache',
-  timestamp: 'home_cache_timestamp',
-};
-
-const CACHE_DURATION = 1 * 60 * 60 * 1000; // 1 hour
-
-const saveCache = async (key: string, data: any) => {
-  try {
-    await AsyncStorage.setItem(key, JSON.stringify(data));
-  } catch (e) {
-    console.error(`Error saving cache for ${key}:`, e);
-  }
-};
-
-const loadCache = async (key: string): Promise<any | null> => {
-  try {
-    const cached = await AsyncStorage.getItem(key);
-    if (!cached) return null;
-    
-    // Check if cache is still valid
-    const timestamp = await AsyncStorage.getItem(CACHE_KEYS.timestamp);
-    if (timestamp && Date.now() - Number(timestamp) > CACHE_DURATION) {
-      return null; // Cache expired
-    }
-    return JSON.parse(cached);
-  } catch (e) {
-    console.error(`Error loading cache for ${key}:`, e);
-    return null;
-  }
-};
-
-const updateCacheTimestamp = async () => {
-  try {
-    await AsyncStorage.setItem(CACHE_KEYS.timestamp, String(Date.now()));
-  } catch (e) {
-    console.error('Error updating cache timestamp:', e);
-  }
-};
-
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -256,63 +211,34 @@ export default function HomeScreen() {
 
   useEffect(() => {
     (async () => {
-      // Phase 0: Load cached data immediately for instant UI
-      const cachedFeatured = await loadCache(CACHE_KEYS.featured);
-      const cachedTop10 = await loadCache(CACHE_KEYS.top10);
-      const cachedSections = await loadCache(CACHE_KEYS.sections);
-      
-      if (cachedFeatured) setFeaturedMovies(cachedFeatured);
-      if (cachedTop10) setTop10Movies(cachedTop10);
-      if (cachedSections) setSectionMovies(cachedSections);
-      
-      // Show UI with fade animation (DON'T WAIT FOR API)
+      // Show UI with fade animation immediately
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
       setHomeReady(true);
 
-      // Phase 1: Load all fresh data in background (featured + top10 + sections)
-      // Use InteractionManager to defer until user finishes initial interactions
-      InteractionManager.runAfterInteractions(async () => {
-        try {
-          const results = await Promise.allSettled([
-            getHomeMovies(),      // Featured movies
-            getTop10Films(),       // Top 10
-            ...SECTION_CONFIGS.map((s) => s.fetchFn()),  // 4 sections
-          ]);
+      // Load featured and top10 immediately, then hydrate each section independently.
+      getHomeMovies()
+        .then((movies) => setFeaturedMovies(movies.slice(0, 8)))
+        .catch((e) => console.error('Error loading featured movies:', e));
 
-          // Extract featured movies
-          const featuredResult = results[0];
-          if (featuredResult.status === 'fulfilled') {
-            const freshFeatured = featuredResult.value.slice(0, 8);
-            setFeaturedMovies(freshFeatured);
-            await saveCache(CACHE_KEYS.featured, freshFeatured);
-          }
+      getTop10Films()
+        .then((movies) => setTop10Movies(movies.slice(0, 10)))
+        .catch((e) => console.error('Error loading top10 movies:', e));
 
-          // Extract top10
-          const top10Result = results[1];
-          if (top10Result.status === 'fulfilled') {
-            const freshTop10 = top10Result.value.slice(0, 10);
-            setTop10Movies(freshTop10);
-            await saveCache(CACHE_KEYS.top10, freshTop10);
-          }
-
-          // Extract sections
-          const movies: Record<string, Movie[]> = {};
-          SECTION_CONFIGS.forEach((s, i) => {
-            const sectionResult = results[i + 2];
-            if (sectionResult.status === 'fulfilled') {
-              movies[s.key] = sectionResult.value.slice(0, 12);
-            } else {
-              movies[s.key] = [];
-            }
+      SECTION_CONFIGS.forEach((section) => {
+        section.fetchFn()
+          .then((movies) => {
+            setSectionMovies((prev) => ({
+              ...prev,
+              [section.key]: movies.slice(0, 12),
+            }));
+          })
+          .catch((e) => {
+            console.error(`Error loading section ${section.key}:`, e);
+            setSectionMovies((prev) => ({
+              ...prev,
+              [section.key]: [],
+            }));
           });
-          setSectionMovies(movies);
-          await saveCache(CACHE_KEYS.sections, movies);
-          
-          // Update cache timestamp after successful load
-          await updateCacheTimestamp();
-        } catch (e) {
-          console.error('Error loading data:', e);
-        }
       });
     })();
   }, []);
@@ -388,7 +314,8 @@ export default function HomeScreen() {
   );
 
   const renderHistoryCard = useCallback((entry: WatchHistoryEntry) => {
-    const isEmbedHistory = /\[(NC|HT)\]/i.test(entry.serverLabel || '');
+    const hasPlayableProgress = entry.time > 0 && entry.duration > 0;
+    const isEmbedHistory = /\[(NC|HT)\]/i.test(entry.serverLabel || '') && !hasPlayableProgress;
     const progress = entry.duration > 0 ? Math.min(entry.time / entry.duration, 1) : 0;
     return (
       <TouchableOpacity
@@ -422,7 +349,7 @@ export default function HomeScreen() {
         <Text style={styles.historyEp} numberOfLines={1}>
           {entry.episodeName ? `${entry.episodeName}` : 'Tập 1'}
         </Text>
-        {!isEmbedHistory && (
+        {hasPlayableProgress && !isEmbedHistory && (
           <Text style={styles.historyTime} numberOfLines={1}>
             {formatTime(entry.time)} / {formatTime(entry.duration)}
           </Text>
