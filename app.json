@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Gánh Phim",
-    "slug": "ganh-phim",
+    "name": "Gánh Giải Trí",
+    "slug": "ganh-giai-tri",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/iconapp.png",

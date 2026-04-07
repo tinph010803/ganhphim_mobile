@@ -35,6 +35,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ animation: 'none' }} />
+        <Stack.Screen name="intro" options={{ animation: 'none' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />
         <Stack.Screen name="movie/[id]" />
         <Stack.Screen name="movie/player" options={{ animation: 'none' }} />

@@ -20,7 +20,7 @@ import { getTop10Films } from '@/lib/top10Films';
 import { Movie } from '@/types/movie';
 import { FeaturedCarousel } from '@/components/FeaturedCarousel';
 import { MovieSection } from '@/components/MovieSection';
-import { Bell, ChevronDown, Settings, X, Play } from 'lucide-react-native';
+import { ChevronDown, X, Play, Menu } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getWatchHistory, WatchHistoryEntry, formatTime } from '@/lib/watchHistory';
 import { useAuth } from '@/context/AuthContext';
@@ -444,11 +444,12 @@ export default function HomeScreen() {
           </View>
         </View>
         <View style={styles.headerIcons}>
-          <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-            <Bell size={20} color={Colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-            <Settings size={20} color={Colors.text} />
+          <TouchableOpacity
+            style={styles.iconButton}
+            activeOpacity={0.7}
+            onPress={() => router.replace('/intro' as any)}
+          >
+            <Menu size={20} color={Colors.text} />
           </TouchableOpacity>
         </View>
       </View>
