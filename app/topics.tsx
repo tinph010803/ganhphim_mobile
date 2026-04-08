@@ -12,7 +12,7 @@ const CARD_WIDTH = Math.floor((SCREEN_WIDTH - H_PAD * 2 - GAP) / 2);
 const CARD_HEIGHT = Math.round(CARD_WIDTH * 0.62);
 
 const TOPICS = [
-  { slug: 'hot-ran-ran', name: 'Hot Rần Rần', color: '#e5091a', thumbnail: 'https://img.upanhnhanh.com/09135e97e7ae94ff1d45780b7e22941f', filter: { sort_by: 'views', status: 'ongoing' } },
+  { slug: 'hot-ran-ran', name: 'Hot Rần Rần', color: '#e5091a', thumbnail: 'https://sf-static.onflixcdn.pics/images/pic/1770999672_Sarah_onflix.webp', filter: { sort_by: 'views', status: 'ongoing' } },
   { slug: 'dang-chieu-phat', name: 'Đang Chiếu Phát', color: '#b5420a', thumbnail: 'https://img.upanhnhanh.com/545e7a4895048bd8fe1219cb09eb1e54', filter: { status: 'ongoing' } },
   { slug: 'phim-truyen-hinh-trung-quoc-dai-luc', name: 'Trung Quốc', color: '#1a6b3a', thumbnail: 'https://img.upanhnhanh.com/88c5903ca2638698c9a176e5d1effa1f', filter: { country_code: 'trung-quoc', type: 'phim-bo' } },
   { slug: 'hoat-hinh-chon-loc', name: 'Hoạt hình', color: '#1a3a6b', thumbnail: 'https://img.upanhnhanh.com/5f4e92805e8b87a3c539df9112ac7312', filter: { q: 'hoạt hình' } },

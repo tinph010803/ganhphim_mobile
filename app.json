@@ -3,7 +3,7 @@
     "name": "Gánh Giải Trí",
     "slug": "ganh-phim",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/iconapp.png",
     "scheme": "myapp",
     "userInterfaceStyle": "dark",

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -77,7 +77,7 @@ const LOGOS = {
     ganhGiaiTri: 'https://img.upanhnhanh.com/d8d7ada8c26081ef68c5f6af04d61982',
     ganhPhim: 'https://img.upanhnhanh.com/59d8b08a46a15c8b4e1ca6f766fa8afa',
     thanhGanhManga: 'https://img.upanhnhanh.com/c1b2b67d909a03f92e233092ed4b56fd',
-    ganhTheThao: 'https://img.upanhnhanh.com/69574ddd72e55b0a3649498adb4a1d9e',
+    ganhTheThao: 'https://img.upanhnhanh.com/7f20bbdd8347a97d368892053626bff2',
     ganh18: 'https://img.upanhnhanh.com/19fa858dbe0b4d7c41c31ac3e05d3a57',
 };
 
@@ -89,10 +89,15 @@ const BACKGROUNDS = {
         'https://images.unsplash.com/photo-1503135935062-b7d1f5a0690f?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
 };
 
+    const SPORTS_GATE_IMAGE = 'https://img.upanhnhanh.com/9ecfcd2828e9c2b6ba2084d1ebe86e56';
+
 export default function IntroScreen() {
     const router = useRouter();
+    const scrollRef = useRef<ScrollView>(null);
     const [activeTab, setActiveTab] = useState<'home' | 'terms' | 'license'>('home');
     const [openDocId, setOpenDocId] = useState<'good-standing' | 'business' | null>(null);
+    const [showSportsGate, setShowSportsGate] = useState(false);
+    const [sportsTermsAccepted, setSportsTermsAccepted] = useState(false);
     const currentDate = useMemo(() => {
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
@@ -112,6 +117,20 @@ export default function IntroScreen() {
         []
     );
 
+    const handleContinueToSports = () => {
+        if (!sportsTermsAccepted) return;
+
+        setShowSportsGate(false);
+        router.push('/ganhthethao' as any);
+    };
+
+    const handleTabChange = (tab: 'home' | 'terms' | 'license') => {
+        setActiveTab(tab);
+        requestAnimationFrame(() => {
+            scrollRef.current?.scrollTo({ y: 0, animated: true });
+        });
+    };
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <LinearGradient
@@ -120,7 +139,7 @@ export default function IntroScreen() {
                 end={{ x: 0.9, y: 1 }}
                 style={styles.container}
             >
-                <ScrollView style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={scrollRef} style={styles.scrollArea} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
                     <View style={styles.header}>
                         <Image source={{ uri: LOGOS.ganhGiaiTri }} style={styles.brandImage} contentFit="contain" contentPosition="left" />
                     </View>
@@ -183,18 +202,18 @@ export default function IntroScreen() {
                                     title={<Image source={{ uri: LOGOS.ganhTheThao }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
                                     subtitle={<Text style={styles.featureSubtitle}>KHÔNG NÊN CỜ BẠC</Text>}
                                     description="Không gian tổng hợp thông tin thể thao mang tính giải trí và cập nhật nhanh."
-                                    action="Sắp ra mắt"
+                                    action="Xem ngay"
                                     backgroundImage={BACKGROUNDS.ganhTheThao}
-                                    disabled
+                                    onPress={() => setShowSportsGate(true)}
                                 />
 
                                 <FeatureCard
                                     title={<Image source={{ uri: LOGOS.ganh18 }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
                                     subtitle={<Text style={styles.featureSubtitle}>18+ | Cần xác minh độ tuổi</Text>}
                                     description="Nội dung dành cho người lớn. Vui lòng xác minh độ tuổi trước khi truy cập."
-                                    action="Sắp ra mắt"
+                                    action="Xem ngay"
                                     backgroundImage={BACKGROUNDS.ganh18}
-                                    disabled
+                                    onPress={() => router.push('/ganh18' as any)}
                                 />
                             </View>
                         </>
@@ -325,7 +344,7 @@ export default function IntroScreen() {
 
                 <View style={styles.bottomMenu}>
                     <Pressable
-                        onPress={() => setActiveTab('home')}
+                        onPress={() => handleTabChange('home')}
                         style={({ pressed }) => [
                             styles.menuItem,
                             activeTab === 'home' && styles.menuItemActive,
@@ -336,7 +355,7 @@ export default function IntroScreen() {
                     </Pressable>
 
                     <Pressable
-                        onPress={() => setActiveTab('terms')}
+                        onPress={() => handleTabChange('terms')}
                         style={({ pressed }) => [
                             styles.menuItem,
                             activeTab === 'terms' && styles.menuItemActive,
@@ -347,7 +366,7 @@ export default function IntroScreen() {
                     </Pressable>
 
                     <Pressable
-                        onPress={() => setActiveTab('license')}
+                        onPress={() => handleTabChange('license')}
                         style={({ pressed }) => [
                             styles.menuItem,
                             activeTab === 'license' && styles.menuItemActive,
@@ -357,6 +376,53 @@ export default function IntroScreen() {
                         <Text style={[styles.menuText, activeTab === 'license' && styles.menuTextActive]}>Giấy phép</Text>
                     </Pressable>
                 </View>
+
+                {showSportsGate ? (
+                    <View style={styles.sportsGateOverlay}>
+                        <View style={styles.sportsGateCard}>
+                            <Pressable
+                                onPress={() => setShowSportsGate(false)}
+                                style={({ pressed }) => [styles.sportsGateCloseBtn, pressed && styles.sportsGateCloseBtnPressed]}
+                            >
+                                <Text style={styles.sportsGateCloseText}>X</Text>
+                            </Pressable>
+
+                            <Image source={{ uri: SPORTS_GATE_IMAGE }} style={styles.sportsGateImage} contentFit="contain" />
+
+                            <Pressable
+                                onPress={() => setSportsTermsAccepted((prev) => !prev)}
+                                style={({ pressed }) => [styles.sportsGateTermsRow, pressed && styles.sportsGateTermsRowPressed]}
+                            >
+                                <View style={[styles.sportsGateCheckbox, sportsTermsAccepted && styles.sportsGateCheckboxChecked]}>
+                                    {sportsTermsAccepted ? <Text style={styles.sportsGateCheckboxMark}>✓</Text> : null}
+                                </View>
+                                <Text style={styles.sportsGateTermsText}>Tôi đồng ý với</Text>
+                                <Pressable
+                                    onPress={() => {
+                                        setShowSportsGate(false);
+                                        setActiveTab('terms');
+                                    }}
+                                >
+                                    <Text style={styles.sportsGateTermsLink}>điều khoản của hệ thống</Text>
+                                </Pressable>
+                            </Pressable>
+
+                            <Pressable
+                                onPress={handleContinueToSports}
+                                disabled={!sportsTermsAccepted}
+                                style={({ pressed }) => [
+                                    styles.sportsGateContinueBtn,
+                                    !sportsTermsAccepted && styles.sportsGateContinueBtnDisabled,
+                                    pressed && sportsTermsAccepted && styles.sportsGateContinueBtnPressed,
+                                ]}
+                            >
+                                <Text style={[styles.sportsGateContinueText, !sportsTermsAccepted && styles.sportsGateContinueTextDisabled]}>
+                                    Tiếp tục
+                                </Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                ) : null}
             </LinearGradient>
         </SafeAreaView>
     );
@@ -690,5 +756,104 @@ const styles = StyleSheet.create({
     },
     menuTextActive: {
         color: '#F2D35F',
+    },
+    sportsGateOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(4, 10, 28, 0.76)',
+        paddingHorizontal: 18,
+        justifyContent: 'center',
+    },
+    sportsGateCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: '#425EA5',
+        backgroundColor: '#0D1D4E',
+        padding: 12,
+    },
+    sportsGateCloseBtn: {
+        alignSelf: 'flex-end',
+        width: 30,
+        height: 30,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#203A7B',
+        marginBottom: 8,
+    },
+    sportsGateCloseBtnPressed: {
+        opacity: 0.82,
+    },
+    sportsGateCloseText: {
+        color: '#EEF3FF',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    sportsGateImage: {
+        width: '100%',
+        height: 380,
+        borderRadius: 14,
+        backgroundColor: '#0A173E',
+    },
+    sportsGateTermsRow: {
+        marginTop: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    sportsGateTermsRowPressed: {
+        opacity: 0.9,
+    },
+    sportsGateCheckbox: {
+        width: 20,
+        height: 20,
+        borderWidth: 1,
+        borderColor: '#7E93C9',
+        borderRadius: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#13295E',
+    },
+    sportsGateCheckboxChecked: {
+        borderColor: '#F0D56A',
+        backgroundColor: '#324062',
+    },
+    sportsGateCheckboxMark: {
+        color: '#F8DF7A',
+        fontSize: 12,
+        fontWeight: '800',
+        lineHeight: 14,
+    },
+    sportsGateTermsText: {
+        color: '#C6D1EE',
+        fontSize: 14,
+    },
+    sportsGateTermsLink: {
+        color: '#8BC3FF',
+        fontSize: 14,
+        textDecorationLine: 'underline',
+        fontWeight: '600',
+    },
+    sportsGateContinueBtn: {
+        marginTop: 14,
+        backgroundColor: '#E7C85A',
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    sportsGateContinueBtnDisabled: {
+        backgroundColor: '#46537A',
+    },
+    sportsGateContinueBtnPressed: {
+        opacity: 0.88,
+    },
+    sportsGateContinueText: {
+        color: '#1A2550',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    sportsGateContinueTextDisabled: {
+        color: '#A6B2D2',
     },
 });
