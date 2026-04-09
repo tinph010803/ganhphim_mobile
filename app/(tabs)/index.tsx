@@ -11,6 +11,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
@@ -20,7 +21,7 @@ import { getTop10Films } from '@/lib/top10Films';
 import { Movie } from '@/types/movie';
 import { FeaturedCarousel } from '@/components/FeaturedCarousel';
 import { MovieSection } from '@/components/MovieSection';
-import { ChevronDown, X, Play, Menu } from 'lucide-react-native';
+import { ChevronDown, X, Play, Menu, Film } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { getWatchHistory, WatchHistoryEntry, formatTime } from '@/lib/watchHistory';
 import { useAuth } from '@/context/AuthContext';
@@ -200,8 +201,34 @@ export default function HomeScreen() {
   const [genreSort, setGenreSort] = useState<'moi-nhat' | 'xem-nhieu'>('moi-nhat');
   const [watchHistory, setWatchHistory] = useState<WatchHistoryEntry[]>([]);
   const [homeReady, setHomeReady] = useState(false);
+  const [showTrailers, setShowTrailers] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Load trailer preference from AsyncStorage
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem('showTrailers');
+        if (stored !== null) {
+          setShowTrailers(stored === 'true');
+        }
+      } catch (e) {
+        console.error('Error loading trailer preference:', e);
+      }
+    })();
+  }, []);
+
+  // Save trailer preference to AsyncStorage
+  const toggleTrailers = useCallback(async () => {
+    const newState = !showTrailers;
+    setShowTrailers(newState);
+    try {
+      await AsyncStorage.setItem('showTrailers', String(newState));
+    } catch (e) {
+      console.error('Error saving trailer preference:', e);
+    }
+  }, [showTrailers]);
 
   // Reload watch history every time screen is focused
   useFocusEffect(useCallback(() => {
@@ -360,7 +387,7 @@ export default function HomeScreen() {
 
   const listHeader = useMemo(() => (
     <Animated.View style={{ opacity: fadeAnim }}>
-      {<FeaturedCarousel />}
+      {<FeaturedCarousel showTrailers={showTrailers} />}
       <View style={[styles.sectionContainer, { marginTop: 16 }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Bạn đang quan tâm gì?</Text>
@@ -394,7 +421,7 @@ export default function HomeScreen() {
         </View>
       )}
     </Animated.View>
-  ), [fadeAnim, watchHistory, renderHistoryCard]);
+  ), [fadeAnim, watchHistory, renderHistoryCard, showTrailers]);
 
   const listFooter = useMemo(() => {
     return (
@@ -444,6 +471,13 @@ export default function HomeScreen() {
           </View>
         </View>
         <View style={styles.headerIcons}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            activeOpacity={0.7}
+            onPress={toggleTrailers}
+          >
+            <Film size={20} color={showTrailers ? Colors.primary : Colors.text} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconButton}
             activeOpacity={0.7}

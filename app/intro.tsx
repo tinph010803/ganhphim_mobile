@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -76,6 +76,7 @@ function FeatureCard({
 const LOGOS = {
     ganhGiaiTri: 'https://img.upanhnhanh.com/d8d7ada8c26081ef68c5f6af04d61982',
     ganhPhim: 'https://img.upanhnhanh.com/59d8b08a46a15c8b4e1ca6f766fa8afa',
+    ganh88: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775745095/ganhgame_g8zdu4.png',
     thanhGanhManga: 'https://img.upanhnhanh.com/c1b2b67d909a03f92e233092ed4b56fd',
     ganhTheThao: 'https://img.upanhnhanh.com/7f20bbdd8347a97d368892053626bff2',
     ganh18: 'https://img.upanhnhanh.com/19fa858dbe0b4d7c41c31ac3e05d3a57',
@@ -83,13 +84,14 @@ const LOGOS = {
 
 const BACKGROUNDS = {
     ganhPhim: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&h=500&fit=crop',
+    ganh88: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775745095/background_ganhgame_bowmpp.jpg',
     thanhGanhManga: 'https://www.thiagiaitri.com/images/bg-thiaanime.jpg',
     ganhTheThao: 'https://www.thiagiaitri.com/images/bg-thiabong.jpg',
     ganh18:
         'https://images.unsplash.com/photo-1503135935062-b7d1f5a0690f?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
 };
 
-    const SPORTS_GATE_IMAGE = 'https://img.upanhnhanh.com/9ecfcd2828e9c2b6ba2084d1ebe86e56';
+const SPORTS_GATE_IMAGE = 'https://img.upanhnhanh.com/9ecfcd2828e9c2b6ba2084d1ebe86e56';
 
 export default function IntroScreen() {
     const router = useRouter();
@@ -98,6 +100,9 @@ export default function IntroScreen() {
     const [openDocId, setOpenDocId] = useState<'good-standing' | 'business' | null>(null);
     const [showSportsGate, setShowSportsGate] = useState(false);
     const [sportsTermsAccepted, setSportsTermsAccepted] = useState(false);
+    const [showGanh18Gate, setShowGanh18Gate] = useState(false);
+    const [ganh18Password, setGanh18Password] = useState('');
+    const [ganh18PasswordError, setGanh18PasswordError] = useState('');
     const currentDate = useMemo(() => {
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
@@ -122,6 +127,18 @@ export default function IntroScreen() {
 
         setShowSportsGate(false);
         router.push('/ganhthethao' as any);
+    };
+
+    const handleVerifyGanh18 = () => {
+        if (ganh18Password === '183009') {
+            setShowGanh18Gate(false);
+            setGanh18Password('');
+            setGanh18PasswordError('');
+            router.push('/ganh18' as any);
+        } else {
+            setGanh18PasswordError('Mật khẩu không chính xác');
+            setGanh18Password('');
+        }
     };
 
     const handleTabChange = (tab: 'home' | 'terms' | 'license') => {
@@ -191,6 +208,15 @@ export default function IntroScreen() {
                                 />
 
                                 <FeatureCard
+                                    title={<Image source={{ uri: LOGOS.ganh88 }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
+                                    subtitle={<Text style={styles.featureSubtitle}>GAME GIẢI TRÍ | KHÔNG NÊN CỜ BẠC</Text>}
+                                    description="Khu giải trí Ganh88 với giao diện riêng và nền hình nổi bật trên mobile."
+                                    action="Khám phá"
+                                    backgroundImage={BACKGROUNDS.ganh88}
+                                    onPress={() => router.push('/ganh88' as any)}
+                                />
+
+                                <FeatureCard
                                     title={<Image source={{ uri: LOGOS.thanhGanhManga }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
                                     description="Kho anime và hoạt hình chọn lọc với điều hướng đơn giản, mượt mà."
                                     action="Sắp ra mắt"
@@ -213,7 +239,7 @@ export default function IntroScreen() {
                                     description="Nội dung dành cho người lớn. Vui lòng xác minh độ tuổi trước khi truy cập."
                                     action="Xem ngay"
                                     backgroundImage={BACKGROUNDS.ganh18}
-                                    onPress={() => router.push('/ganh18' as any)}
+                                    onPress={() => setShowGanh18Gate(true)}
                                 />
                             </View>
                         </>
@@ -419,6 +445,55 @@ export default function IntroScreen() {
                                 <Text style={[styles.sportsGateContinueText, !sportsTermsAccepted && styles.sportsGateContinueTextDisabled]}>
                                     Tiếp tục
                                 </Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                ) : null}
+
+                {showGanh18Gate ? (
+                    <View style={styles.ganh18GateOverlay}>
+                        <View style={styles.ganh18GateCard}>
+                            <Pressable
+                                onPress={() => {
+                                    setShowGanh18Gate(false);
+                                    setGanh18Password('');
+                                    setGanh18PasswordError('');
+                                }}
+                                style={({ pressed }) => [styles.ganh18GateCloseBtn, pressed && styles.ganh18GateCloseBtnPressed]}
+                            >
+                                <Text style={styles.ganh18GateCloseText}>X</Text>
+                            </Pressable>
+
+                            <Text style={styles.ganh18GateTitle}>Cảnh báo nội dung 18+</Text>
+                            <Text style={styles.ganh18GateDescription}>
+                                Khu vực này chứa nội dung dành cho người trưởng thành. Bạn phải xác minh tính hợp pháp để tiếp tục.
+                            </Text>
+                            <Text style={styles.ganh18GateDescription}>
+                                Vì chưa hoàn thành nên sẽ cần mật khẩu. Xin lỗi vì sự bất tiện này!!!
+                            </Text>
+
+                            <View style={styles.ganh18PasswordBox}>
+                                <TextInput
+                                    style={styles.ganh18PasswordInput}
+                                    placeholder="Nhập mật khẩu..."
+                                    placeholderTextColor="#8FA2D5"
+                                    secureTextEntry
+                                    value={ganh18Password}
+                                    onChangeText={(text) => {
+                                        setGanh18Password(text);
+                                        setGanh18PasswordError('');
+                                    }}
+                                />
+                            </View>
+                            {ganh18PasswordError ? (
+                                <Text style={styles.ganh18PasswordError}>{ganh18PasswordError}</Text>
+                            ) : null}
+
+                            <Pressable
+                                onPress={handleVerifyGanh18}
+                                style={({ pressed }) => [styles.ganh18GateContinueBtn, pressed && styles.ganh18GateContinueBtnPressed]}
+                            >
+                                <Text style={styles.ganh18GateContinueText}>Tôi đã 18 tuổi - Tiếp tục</Text>
                             </Pressable>
                         </View>
                     </View>
@@ -855,5 +930,86 @@ const styles = StyleSheet.create({
     },
     sportsGateContinueTextDisabled: {
         color: '#A6B2D2',
+    },
+    ganh18GateOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(4, 10, 28, 0.76)',
+        paddingHorizontal: 18,
+        justifyContent: 'center',
+    },
+    ganh18GateCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: '#FF6B7A',
+        backgroundColor: '#0D1D4E',
+        padding: 16,
+        gap: 12,
+    },
+    ganh18GateCloseBtn: {
+        alignSelf: 'flex-end',
+        width: 30,
+        height: 30,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FF6B7A',
+        marginBottom: 4,
+    },
+    ganh18GateCloseBtnPressed: {
+        opacity: 0.82,
+    },
+    ganh18GateCloseText: {
+        color: '#FFF6FF',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    ganh18GateTitle: {
+        color: '#FF6B7A',
+        fontSize: 20,
+        fontWeight: '800',
+        marginBottom: 4,
+    },
+    ganh18GateDescription: {
+        color: '#D7DEEF',
+        fontSize: 14,
+        lineHeight: 21,
+        marginBottom: 8,
+    },
+    ganh18PasswordBox: {
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+        marginBottom: 4,
+    },
+    ganh18PasswordInput: {
+        color: '#EBF1FF',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    ganh18PasswordError: {
+        color: '#FF6B7A',
+        fontSize: 12,
+        fontWeight: '600',
+        marginHorizontal: 4,
+        marginBottom: 8,
+    },
+    ganh18GateContinueBtn: {
+        marginTop: 8,
+        backgroundColor: '#FF6B7A',
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    ganh18GateContinueBtnPressed: {
+        opacity: 0.88,
+    },
+    ganh18GateContinueText: {
+        color: '#FFF6FF',
+        fontSize: 15,
+        fontWeight: '800',
     },
 });

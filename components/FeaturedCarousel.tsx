@@ -101,11 +101,13 @@ const BannerSlide = memo(function BannerSlide({
   active,
   muted,
   onToggleMute,
+  showTrailers = true,
 }: {
   item: SlideItem;
   active: boolean;
   muted: boolean;
   onToggleMute: () => void;
+  showTrailers?: boolean;
 }) {
   const router = useRouter();
   const { slug, movie, ov } = item;
@@ -138,7 +140,7 @@ const BannerSlide = memo(function BannerSlide({
   const charUri  = optimizeImageUrl(clean(ov.character), 'char');
   const titleUri = optimizeImageUrl(clean(ov.titleImg), 'title');
   const directVideoUrl = ov.trailerUrl ? toDirectVideoUrl(ov.trailerUrl) : '';
-  const hasTrailer     = !!directVideoUrl;
+  const hasTrailer     = !!directVideoUrl && showTrailers;
 
   const handlePress = useCallback(() => {
     router.push({ pathname: '/movie/[id]', params: { id: slug } });
@@ -256,10 +258,11 @@ const BannerSlide = memo(function BannerSlide({
 }, (prev, next) =>
   prev.active === next.active &&
   prev.item   === next.item   &&
-  prev.muted  === next.muted
+  prev.muted  === next.muted  &&
+  prev.showTrailers === next.showTrailers
 );
 
-export const FeaturedCarousel = memo(function FeaturedCarousel() {
+export const FeaturedCarousel = memo(function FeaturedCarousel({ showTrailers = true }: { showTrailers?: boolean }) {
   const [slides] = useState<SlideItem[]>(() =>
     FEATURED_OVERRIDES.map(({ slug, ...ov }) => ({ slug, movie: null, ov }))
   );
@@ -347,6 +350,7 @@ export const FeaturedCarousel = memo(function FeaturedCarousel() {
             active={index === activeIndex}
             muted={muted}
             onToggleMute={toggleMute}
+            showTrailers={showTrailers}
           />
         ))}
       </ScrollView>
