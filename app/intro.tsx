@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -13,6 +13,8 @@ type FeatureCardProps = {
     description: string;
     action: string;
     backgroundImage: string;
+    imageFit?: 'cover' | 'contain';
+    fullBackground?: boolean;
     disabled?: boolean;
     onPress?: () => void;
 };
@@ -23,6 +25,8 @@ function FeatureCard({
     description,
     action,
     backgroundImage,
+    imageFit = 'cover',
+    fullBackground = false,
     disabled,
     onPress,
 }: FeatureCardProps) {
@@ -39,8 +43,8 @@ function FeatureCard({
             disabled={disabled}
         >
             <View style={[styles.featureCardSurface, disabled && styles.featureCardSurfaceDisabled]}>
-                <View style={styles.cardMediaRight}>
-                    <Image source={{ uri: backgroundImage }} style={styles.cardMediaImage} contentFit="cover" contentPosition="right" />
+                <View style={[styles.cardMediaRight, fullBackground && styles.cardMediaFull]}>
+                    <Image source={{ uri: backgroundImage }} style={styles.cardMediaImage} contentFit={imageFit} contentPosition="right" />
                 </View>
 
                 <LinearGradient
@@ -79,19 +83,39 @@ const LOGOS = {
     ganh88: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775745095/ganhgame_g8zdu4.png',
     thanhGanhManga: 'https://img.upanhnhanh.com/c1b2b67d909a03f92e233092ed4b56fd',
     ganhTheThao: 'https://img.upanhnhanh.com/7f20bbdd8347a97d368892053626bff2',
-    ganh18: 'https://img.upanhnhanh.com/19fa858dbe0b4d7c41c31ac3e05d3a57',
+    ganh3d: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775824346/ganh3d-removebg-preview_x3cw8x.png',
 };
 
 const BACKGROUNDS = {
     ganhPhim: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&h=500&fit=crop',
     ganh88: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775745095/background_ganhgame_bowmpp.jpg',
-    thanhGanhManga: 'https://www.thiagiaitri.com/images/bg-thiaanime.jpg',
+    thanhGanhManga: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775825068/backgrond_ganhmanga_wi9yd4.png',
     ganhTheThao: 'https://www.thiagiaitri.com/images/bg-thiabong.jpg',
-    ganh18:
-        'https://images.unsplash.com/photo-1503135935062-b7d1f5a0690f?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+    ganh3d: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775825490/background_ganh3d_gcgb3g.jpg',
 };
 
 const SPORTS_GATE_IMAGE = 'https://img.upanhnhanh.com/9ecfcd2828e9c2b6ba2084d1ebe86e56';
+
+const GANH3D_PROFILES = [
+    {
+        id: 'son-tuong',
+        name: 'Sơn Tường Xem Tivi [T]',
+        username: 'teophan370',
+        avatar: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775823230/photo-1-17168606131071257137350-1717299704114-17172997052861912201322_sgflfc.jpg',
+    },
+    {
+        id: 'dach-5-cu',
+        name: 'Dách 5 Củ [H]',
+        username: 'teophan371',
+        avatar: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775823229/jack--17345360331611347307406_uftcan.webp',
+    },
+    {
+        id: 'trinh-ai-cham',
+        name: 'Trình Ai Chấm [N]',
+        username: 'teophan372',
+        avatar: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775823230/HIEUTHUHAI-3-scaled_c1w8x2.jpg',
+    },
+] as const;
 
 export default function IntroScreen() {
     const router = useRouter();
@@ -101,8 +125,6 @@ export default function IntroScreen() {
     const [showSportsGate, setShowSportsGate] = useState(false);
     const [sportsTermsAccepted, setSportsTermsAccepted] = useState(false);
     const [showGanh18Gate, setShowGanh18Gate] = useState(false);
-    const [ganh18Password, setGanh18Password] = useState('');
-    const [ganh18PasswordError, setGanh18PasswordError] = useState('');
     const currentDate = useMemo(() => {
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
@@ -129,16 +151,12 @@ export default function IntroScreen() {
         router.push('/ganhthethao' as any);
     };
 
-    const handleVerifyGanh18 = () => {
-        if (ganh18Password === '183009') {
-            setShowGanh18Gate(false);
-            setGanh18Password('');
-            setGanh18PasswordError('');
-            router.push('/ganh18' as any);
-        } else {
-            setGanh18PasswordError('Mật khẩu không chính xác');
-            setGanh18Password('');
-        }
+    const handleSelectGanh3dProfile = (username: string) => {
+        setShowGanh18Gate(false);
+        router.push({
+            pathname: '/ganh3d' as any,
+            params: { user: username },
+        });
     };
 
     const handleTabChange = (tab: 'home' | 'terms' | 'license') => {
@@ -206,6 +224,23 @@ export default function IntroScreen() {
                                     backgroundImage={BACKGROUNDS.ganhPhim}
                                     onPress={() => router.replace('/(tabs)')}
                                 />
+                                <FeatureCard
+                                    title={<Image source={{ uri: LOGOS.ganh3d }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
+                                    description="Chuyên mục phim 3D tu tiên nổi bật, giao diện gọn nhẹ và tối ưu cho mobile."
+                                    action="Xem ngay"
+                                    backgroundImage={BACKGROUNDS.ganh3d}
+                                    imageFit="contain"
+                                    fullBackground
+                                    onPress={() => setShowGanh18Gate(true)}
+                                />
+                                <FeatureCard
+                                    title={<Image source={{ uri: LOGOS.ganhTheThao }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
+                                    subtitle={<Text style={styles.featureSubtitle}>KHÔNG NÊN CỜ BẠC</Text>}
+                                    description="Không gian tổng hợp thông tin thể thao mang tính giải trí và cập nhật nhanh."
+                                    action="Xem ngay"
+                                    backgroundImage={BACKGROUNDS.ganhTheThao}
+                                    onPress={() => setShowSportsGate(true)}
+                                />
 
                                 <FeatureCard
                                     title={<Image source={{ uri: LOGOS.ganh88 }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
@@ -224,23 +259,9 @@ export default function IntroScreen() {
                                     disabled
                                 />
 
-                                <FeatureCard
-                                    title={<Image source={{ uri: LOGOS.ganhTheThao }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
-                                    subtitle={<Text style={styles.featureSubtitle}>KHÔNG NÊN CỜ BẠC</Text>}
-                                    description="Không gian tổng hợp thông tin thể thao mang tính giải trí và cập nhật nhanh."
-                                    action="Xem ngay"
-                                    backgroundImage={BACKGROUNDS.ganhTheThao}
-                                    onPress={() => setShowSportsGate(true)}
-                                />
 
-                                <FeatureCard
-                                    title={<Image source={{ uri: LOGOS.ganh18 }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
-                                    subtitle={<Text style={styles.featureSubtitle}>18+ | Cần xác minh độ tuổi</Text>}
-                                    description="Nội dung dành cho người lớn. Vui lòng xác minh độ tuổi trước khi truy cập."
-                                    action="Xem ngay"
-                                    backgroundImage={BACKGROUNDS.ganh18}
-                                    onPress={() => setShowGanh18Gate(true)}
-                                />
+
+
                             </View>
                         </>
                     ) : activeTab === 'terms' ? (
@@ -270,10 +291,10 @@ export default function IntroScreen() {
                             <View style={styles.termsBlock}>
                                 <Text style={styles.termsBlockTitle}>3. Quy định về nội dung</Text>
                                 <Text style={styles.termsText}>
-                                    GanhGiaiTri cung cấp nhiều loại nội dung khác nhau, bao gồm cả nội dung dành cho người lớn (GANH18). Người dùng có trách nhiệm đảm bảo rằng mình đủ tuổi pháp lý.
+                                    GanhGiaiTri cung cấp nhiều loại nội dung khác nhau, bao gồm chuyên mục phim 3D tu tiên (GANH3D).
                                 </Text>
                                 <Text style={styles.termsText}>
-                                    Chúng tôi không chịu trách nhiệm nếu người dùng chưa đủ tuổi truy cập vào các nội dung không phù hợp.
+                                    Nội dung mang tính giải trí, người dùng cần tự cân nhắc tính phù hợp trước khi truy cập.
                                 </Text>
                             </View>
 
@@ -454,46 +475,36 @@ export default function IntroScreen() {
                     <View style={styles.ganh18GateOverlay}>
                         <View style={styles.ganh18GateCard}>
                             <Pressable
-                                onPress={() => {
-                                    setShowGanh18Gate(false);
-                                    setGanh18Password('');
-                                    setGanh18PasswordError('');
-                                }}
+                                onPress={() => setShowGanh18Gate(false)}
                                 style={({ pressed }) => [styles.ganh18GateCloseBtn, pressed && styles.ganh18GateCloseBtnPressed]}
                             >
                                 <Text style={styles.ganh18GateCloseText}>X</Text>
                             </Pressable>
 
-                            <Text style={styles.ganh18GateTitle}>Cảnh báo nội dung 18+</Text>
-                            <Text style={styles.ganh18GateDescription}>
-                                Khu vực này chứa nội dung dành cho người trưởng thành. Bạn phải xác minh tính hợp pháp để tiếp tục.
-                            </Text>
-                            <Text style={styles.ganh18GateDescription}>
-                                Vì chưa hoàn thành nên sẽ cần mật khẩu. Xin lỗi vì sự bất tiện này!!!
-                            </Text>
+                            <Text style={styles.ganh18GateTitle}>Ai đang xem?</Text>
 
-                            <View style={styles.ganh18PasswordBox}>
-                                <TextInput
-                                    style={styles.ganh18PasswordInput}
-                                    placeholder="Nhập mật khẩu..."
-                                    placeholderTextColor="#8FA2D5"
-                                    secureTextEntry
-                                    value={ganh18Password}
-                                    onChangeText={(text) => {
-                                        setGanh18Password(text);
-                                        setGanh18PasswordError('');
-                                    }}
-                                />
+                            <View style={styles.ganh3dProfilesRow}>
+                                {GANH3D_PROFILES.map((profile) => (
+                                    <Pressable
+                                        key={profile.id}
+                                        onPress={() => handleSelectGanh3dProfile(profile.username)}
+                                        style={({ pressed }) => [styles.ganh3dProfileItem, pressed && styles.ganh3dProfileItemPressed]}
+                                    >
+                                        <Image
+                                            source={{ uri: profile.avatar }}
+                                            style={styles.ganh3dProfileAvatar}
+                                            contentFit="cover"
+                                        />
+                                        <Text style={styles.ganh3dProfileName}>{profile.name}</Text>
+                                    </Pressable>
+                                ))}
                             </View>
-                            {ganh18PasswordError ? (
-                                <Text style={styles.ganh18PasswordError}>{ganh18PasswordError}</Text>
-                            ) : null}
 
                             <Pressable
-                                onPress={handleVerifyGanh18}
+                                onPress={() => setShowGanh18Gate(false)}
                                 style={({ pressed }) => [styles.ganh18GateContinueBtn, pressed && styles.ganh18GateContinueBtnPressed]}
                             >
-                                <Text style={styles.ganh18GateContinueText}>Tôi đã 18 tuổi - Tiếp tục</Text>
+                                <Text style={styles.ganh18GateContinueText}>Đóng</Text>
                             </Pressable>
                         </View>
                     </View>
@@ -616,6 +627,10 @@ const styles = StyleSheet.create({
         right: 0,
         bottom: 0,
         width: '50%',
+    },
+    cardMediaFull: {
+        left: 0,
+        width: '100%',
     },
     cardMediaImage: {
         width: '100%',
@@ -939,11 +954,11 @@ const styles = StyleSheet.create({
     },
     ganh18GateCard: {
         borderRadius: 18,
-        borderWidth: 1,
-        borderColor: '#FF6B7A',
-        backgroundColor: '#0D1D4E',
+        borderWidth: 1.2,
+        borderColor: '#2E323E',
+        backgroundColor: '#0C0D11',
         padding: 16,
-        gap: 12,
+        gap: 14,
     },
     ganh18GateCloseBtn: {
         alignSelf: 'flex-end',
@@ -952,53 +967,58 @@ const styles = StyleSheet.create({
         borderRadius: 999,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FF6B7A',
+        backgroundColor: '#1B1E26',
         marginBottom: 4,
     },
     ganh18GateCloseBtnPressed: {
         opacity: 0.82,
     },
     ganh18GateCloseText: {
-        color: '#FFF6FF',
+        color: '#F1F3F8',
         fontSize: 15,
         fontWeight: '800',
     },
     ganh18GateTitle: {
-        color: '#FF6B7A',
-        fontSize: 20,
-        fontWeight: '800',
-        marginBottom: 4,
+        color: '#F1F3F8',
+        fontSize: 34,
+        lineHeight: 40,
+        fontWeight: '700',
+        textAlign: 'center',
+        marginBottom: 2,
     },
-    ganh18GateDescription: {
-        color: '#D7DEEF',
-        fontSize: 14,
-        lineHeight: 21,
-        marginBottom: 8,
+    ganh3dProfilesRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 10,
     },
-    ganh18PasswordBox: {
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+    ganh3dProfileItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    ganh3dProfileItemPressed: {
+        opacity: 0.84,
+    },
+    ganh3dProfileAvatar: {
+        width: 96,
+        height: 96,
+        borderRadius: 10,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
-        paddingHorizontal: 12,
-        paddingVertical: 11,
-        marginBottom: 4,
+        borderColor: '#333948',
+        backgroundColor: '#151922',
     },
-    ganh18PasswordInput: {
-        color: '#EBF1FF',
+    ganh3dProfileName: {
+        marginTop: 8,
+        color: '#A5ACBA',
         fontSize: 14,
         fontWeight: '600',
-    },
-    ganh18PasswordError: {
-        color: '#FF6B7A',
-        fontSize: 12,
-        fontWeight: '600',
-        marginHorizontal: 4,
-        marginBottom: 8,
+        textAlign: 'center',
     },
     ganh18GateContinueBtn: {
         marginTop: 8,
-        backgroundColor: '#FF6B7A',
+        backgroundColor: '#171922',
+        borderWidth: 1,
+        borderColor: '#3A3F4F',
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
@@ -1008,8 +1028,8 @@ const styles = StyleSheet.create({
         opacity: 0.88,
     },
     ganh18GateContinueText: {
-        color: '#FFF6FF',
+        color: '#D0D5E2',
         fontSize: 15,
-        fontWeight: '800',
+        fontWeight: '700',
     },
 });
