@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, BackHandler, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
@@ -11,37 +11,8 @@ const DEFAULT_USERNAME = 'teophan370';
 const PASSWORD = '425453600';
 const GANH3D_URL = 'https://hoathinh3d.co/';
 const GANH3D_BACKUP_URL = 'https://bit.ly/hh3d';
-const GANH3D_LOGOUT_URL = new URL('/my-account/user-logout', GANH3D_URL).toString();
 const GANH3D_LOGO = 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775824346/ganh3d-removebg-preview_x3cw8x.png';
-const LOGOUT_SCRIPT = `
-(() => {
-  const notify = (ok) => {
-    try {
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'logout-done', ok: !!ok }));
-      }
-    } catch {
-      // Ignore bridge errors.
-    }
-  };
-
-  try {
-    fetch('${GANH3D_LOGOUT_URL}', {
-      method: 'GET',
-      credentials: 'include',
-      mode: 'no-cors',
-      cache: 'no-store',
-    })
-      .catch(() => {})
-      .finally(() => notify(true));
-
-    window.location.href = '${GANH3D_LOGOUT_URL}';
-  } catch {
-    notify(false);
-  }
-})();
-true;
-`;
+const AUTO_LOGIN_DONE_PREFIX = 'rn_ganh3d_autologin_done_';
 const FULLSCREEN_BRIDGE_SCRIPT = `
 (() => {
   const HIDE_SELECTORS = [
@@ -195,17 +166,13 @@ export default function Ganh3dScreen() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
   const autoLoginDoneRef = useRef<Set<string>>(new Set());
-  const logoutTriggeredRef = useRef(false);
-  const pendingExitActionRef = useRef<null | (() => void)>(null);
-  const logoutTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const params = useLocalSearchParams<{ user?: string }>();
+  const params = useLocalSearchParams<{ user?: string }>();
   const [canGoBack, setCanGoBack] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [webUrl, setWebUrl] = useState(GANH3D_URL);
   const [didSwitchToBackupUrl, setDidSwitchToBackupUrl] = useState(false);
-    const username = typeof params.user === 'string' && params.user.trim() ? params.user.trim() : DEFAULT_USERNAME;
-    const shouldAutoLogin = !autoLoginDoneRef.current.has(username);
+  const username = typeof params.user === 'string' && params.user.trim() ? params.user.trim() : DEFAULT_USERNAME;
 
   const lockLandscape = async () => {
     try {
@@ -227,36 +194,6 @@ export default function Ganh3dScreen() {
     }
   };
 
-  const triggerWebLogout = () => {
-    if (logoutTriggeredRef.current) return;
-    logoutTriggeredRef.current = true;
-    webViewRef.current?.injectJavaScript(LOGOUT_SCRIPT);
-  };
-
-  const runPendingExitAction = () => {
-    if (logoutTimeoutRef.current) {
-      clearTimeout(logoutTimeoutRef.current);
-      logoutTimeoutRef.current = null;
-    }
-
-    const action = pendingExitActionRef.current;
-    pendingExitActionRef.current = null;
-    if (action) action();
-  };
-
-  const logoutAndThen = (action: () => void) => {
-    if (logoutTriggeredRef.current) {
-      action();
-      return;
-    }
-
-    pendingExitActionRef.current = action;
-    triggerWebLogout();
-    logoutTimeoutRef.current = setTimeout(() => {
-      runPendingExitAction();
-    }, 1300);
-  };
-
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
@@ -272,7 +209,7 @@ export default function Ganh3dScreen() {
         return true;
       }
 
-      logoutAndThen(() => router.back());
+      router.back();
       return true;
     };
 
@@ -281,24 +218,13 @@ export default function Ganh3dScreen() {
   }, [canGoBack, isExpanded, router]);
 
   useEffect(() => {
-    const appStateSub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'background' || nextState === 'inactive') {
-        triggerWebLogout();
-      }
-    });
-
     return () => {
-      appStateSub.remove();
-      if (logoutTimeoutRef.current) {
-        clearTimeout(logoutTimeoutRef.current);
-      }
-      triggerWebLogout();
       lockPortrait().catch(() => {});
     };
   }, []);
 
   const handleExitToIntro = () => {
-    logoutAndThen(() => router.replace('/intro' as any));
+    router.replace('/intro' as any);
   };
 
   const switchToBackupUrl = () => {
@@ -308,24 +234,35 @@ export default function Ganh3dScreen() {
     setLoading(true);
   };
 
-    const injectedScript = useMemo(() => {
-        const user = JSON.stringify(username);
-        const pass = JSON.stringify(PASSWORD);
+  const autoLoginScript = useMemo(() => {
+    const user = JSON.stringify(username);
+    const pass = JSON.stringify(PASSWORD);
+    const doneKey = `${AUTO_LOGIN_DONE_PREFIX}${encodeURIComponent(username)}`;
 
-        if (!shouldAutoLogin) {
-            return '';
-        }
-
-        autoLoginDoneRef.current.add(username);
-
-        return `
+    return `
 (function() {
   var username = ${user};
   var password = ${pass};
-  var attempts = 0;
+  var doneKey = ${JSON.stringify(doneKey)};
+
+  function hasLoggedInCookie() {
+    return /(?:^|;\\s*)wordpress_logged_in_/i.test(document.cookie || '');
+  }
 
   function isLoggedIn() {
+    try {
+      if (window.localStorage.getItem(doneKey) === '1') return true;
+    } catch {}
+
+    if (hasLoggedInCookie()) return true;
+
     return !!document.querySelector('a[href*="user-logout"], a[href*="logout"], .logged-in, .user-logout');
+  }
+
+  function markDone() {
+    try {
+      window.localStorage.setItem(doneKey, '1');
+    } catch {}
   }
 
   function openLoginUI() {
@@ -341,10 +278,25 @@ export default function Ganh3dScreen() {
     return false;
   }
 
+  function tickRemember() {
+    var remember =
+      document.getElementById('custom-remember') ||
+      document.querySelector('input[type="checkbox"][name*="remember" i], input[type="checkbox"][id*="remember" i], input.custom-checkbox[type="checkbox"]');
+
+    if (!remember) return false;
+    if (!remember.checked) {
+      remember.click();
+      remember.checked = true;
+      remember.dispatchEvent(new Event('input', { bubbles: true }));
+      remember.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    return true;
+  }
+
   function fillLoginForm() {
     var filled = false;
 
-    document.querySelectorAll('input').forEach(function(i){
+    document.querySelectorAll('input').forEach(function(i) {
       var fieldName = String(i.name || i.id || i.placeholder || '').toLowerCase();
 
       if (i.type === 'text' || i.type === 'email' || fieldName.includes('user') || fieldName.includes('email') || fieldName.includes('login')) {
@@ -362,10 +314,13 @@ export default function Ganh3dScreen() {
       }
     });
 
+    tickRemember();
     return filled;
   }
 
   function submitLoginForm() {
+    tickRemember();
+
     var submitBtn =
       document.getElementById('custom-login-submit') ||
       document.querySelector('button[type="submit"], input[type="submit"], .login-submit button, .login-submit input, form button:not([type="button"])');
@@ -379,17 +334,27 @@ export default function Ganh3dScreen() {
   }
 
   function runOnce() {
-    if (isLoggedIn()) return true;
+    if (isLoggedIn()) {
+      markDone();
+      return true;
+    }
 
     openLoginUI();
 
-    setTimeout(function(){
-      if (isLoggedIn()) return;
+    setTimeout(function() {
+      if (isLoggedIn()) {
+        markDone();
+        return;
+      }
 
       fillLoginForm();
 
-      setTimeout(function(){
-        if (isLoggedIn()) return;
+      setTimeout(function() {
+        if (isLoggedIn()) {
+          markDone();
+          return;
+        }
+
         submitLoginForm();
       }, 500);
     }, 700);
@@ -397,7 +362,8 @@ export default function Ganh3dScreen() {
     return false;
   }
 
-  var timer = setInterval(function(){
+  var attempts = 0;
+  var timer = setInterval(function() {
     attempts += 1;
 
     if (runOnce() || attempts > 10) {
@@ -407,12 +373,13 @@ export default function Ganh3dScreen() {
 })();
 true;
 `;
-    }, [username, shouldAutoLogin]);
+  }, [username]);
 
-    const initialInjectedScript = useMemo(() => {
-      const loginScript = injectedScript || 'true;';
-      return `${FULLSCREEN_BRIDGE_SCRIPT}\n${loginScript}`;
-    }, [injectedScript]);
+  const runAutoLoginOnce = () => {
+    if (autoLoginDoneRef.current.has(username)) return;
+    autoLoginDoneRef.current.add(username);
+    webViewRef.current?.injectJavaScript(autoLoginScript);
+  };
 
     const handleWebMessage = (event: any) => {
       const raw = event?.nativeEvent?.data;
@@ -420,11 +387,6 @@ true;
 
       try {
         const msg = JSON.parse(raw);
-        if (msg?.type === 'logout-done') {
-          runPendingExitAction();
-          return;
-        }
-
         if (msg?.type === 'fullscreen-enter') {
             setIsExpanded(true);
           lockLandscape().catch(() => {});
@@ -475,9 +437,8 @@ true;
             ref={webViewRef}
                   key={`${username}-${webUrl}`}
             source={{ uri: webUrl }}
-                    injectedJavaScriptBeforeContentLoaded={initialInjectedScript}
-                    injectedJavaScript={initialInjectedScript}
-                  injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
+                  injectedJavaScriptBeforeContentLoaded={FULLSCREEN_BRIDGE_SCRIPT}
+                  injectedJavaScriptBeforeContentLoadedForMainFrameOnly
                     startInLoadingState
                   originWhitelist={['*']}
                   setSupportMultipleWindows={false}
@@ -489,13 +450,11 @@ true;
                   mixedContentMode="always"
                   thirdPartyCookiesEnabled
                   onLoadStart={() => setLoading(true)}
-                  onLoadEnd={() => setLoading(false)}
-                  onError={switchToBackupUrl}
-                  onHttpError={({ nativeEvent }) => {
-                    if (nativeEvent.statusCode >= 400) {
-                      switchToBackupUrl();
-                    }
+                  onLoadEnd={() => {
+                    setLoading(false);
+                    runAutoLoginOnce();
                   }}
+                  onError={switchToBackupUrl}
                   onLoadProgress={({ nativeEvent }) => {
                     if (nativeEvent.progress > 0.3) {
                       setLoading(false);

@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -79,7 +80,8 @@ function FeatureCard({
 
 const LOGOS = {
     ganhGiaiTri: 'https://img.upanhnhanh.com/d8d7ada8c26081ef68c5f6af04d61982',
-    ganhPhim: 'https://img.upanhnhanh.com/59d8b08a46a15c8b4e1ca6f766fa8afa',
+    // ganhPhim: 'https://img.upanhnhanh.com/59d8b08a46a15c8b4e1ca6f766fa8afa',
+    ganhPhim:'https://res.cloudinary.com/df2amyjzw/image/upload/v1775885578/ganhcinema_lwwhwy.png',
     ganh88: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775745095/ganhgame_g8zdu4.png',
     thanhGanhManga: 'https://img.upanhnhanh.com/c1b2b67d909a03f92e233092ed4b56fd',
     ganhTheThao: 'https://img.upanhnhanh.com/7f20bbdd8347a97d368892053626bff2',
@@ -95,6 +97,7 @@ const BACKGROUNDS = {
 };
 
 const SPORTS_GATE_IMAGE = 'https://img.upanhnhanh.com/9ecfcd2828e9c2b6ba2084d1ebe86e56';
+const GANH3D_LOCKED_USER_KEY = '@ganh3d_locked_user_v1';
 
 const GANH3D_PROFILES = [
     {
@@ -125,6 +128,7 @@ export default function IntroScreen() {
     const [showSportsGate, setShowSportsGate] = useState(false);
     const [sportsTermsAccepted, setSportsTermsAccepted] = useState(false);
     const [showGanh18Gate, setShowGanh18Gate] = useState(false);
+    const [lockedGanh3dUser, setLockedGanh3dUser] = useState<string | null>(null);
     const currentDate = useMemo(() => {
         const now = new Date();
         const day = String(now.getDate()).padStart(2, '0');
@@ -153,11 +157,21 @@ export default function IntroScreen() {
 
     const handleSelectGanh3dProfile = (username: string) => {
         setShowGanh18Gate(false);
+        setLockedGanh3dUser(username);
+        AsyncStorage.setItem(GANH3D_LOCKED_USER_KEY, username).catch(() => {});
         router.push({
             pathname: '/ganh3d' as any,
             params: { user: username },
         });
     };
+
+    useEffect(() => {
+        AsyncStorage.getItem(GANH3D_LOCKED_USER_KEY)
+            .then((value) => {
+                if (value) setLockedGanh3dUser(value);
+            })
+            .catch(() => {});
+    }, []);
 
     const handleTabChange = (tab: 'home' | 'terms' | 'license') => {
         setActiveTab(tab);
@@ -483,12 +497,23 @@ export default function IntroScreen() {
 
                             <Text style={styles.ganh18GateTitle}>Ai đang xem?</Text>
 
+                            {lockedGanh3dUser ? (
+                                <Text style={styles.ganh18GateLockedHint}>
+                                    Đang khóa theo: {GANH3D_PROFILES.find((profile) => profile.username === lockedGanh3dUser)?.name ?? lockedGanh3dUser}
+                                </Text>
+                            ) : null}
+
                             <View style={styles.ganh3dProfilesRow}>
                                 {GANH3D_PROFILES.map((profile) => (
                                     <Pressable
                                         key={profile.id}
                                         onPress={() => handleSelectGanh3dProfile(profile.username)}
-                                        style={({ pressed }) => [styles.ganh3dProfileItem, pressed && styles.ganh3dProfileItemPressed]}
+                                        disabled={lockedGanh3dUser !== null && lockedGanh3dUser !== profile.username}
+                                        style={({ pressed }) => [
+                                            styles.ganh3dProfileItem,
+                                            lockedGanh3dUser !== null && lockedGanh3dUser !== profile.username && styles.ganh3dProfileItemDisabled,
+                                            pressed && lockedGanh3dUser === null && styles.ganh3dProfileItemPressed,
+                                        ]}
                                     >
                                         <Image
                                             source={{ uri: profile.avatar }}
@@ -999,6 +1024,9 @@ const styles = StyleSheet.create({
     ganh3dProfileItemPressed: {
         opacity: 0.84,
     },
+    ganh3dProfileItemDisabled: {
+        opacity: 0.35,
+    },
     ganh3dProfileAvatar: {
         width: 96,
         height: 96,
@@ -1013,6 +1041,14 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
         textAlign: 'center',
+    },
+    ganh18GateLockedHint: {
+        color: '#B6C1DD',
+        fontSize: 13,
+        lineHeight: 18,
+        textAlign: 'center',
+        marginTop: -6,
+        marginBottom: 2,
     },
     ganh18GateContinueBtn: {
         marginTop: 8,
