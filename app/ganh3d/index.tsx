@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, BackHandler, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -165,7 +166,8 @@ true;
 export default function Ganh3dScreen() {
   const router = useRouter();
   const webViewRef = useRef<WebView>(null);
-  const autoLoginDoneRef = useRef<Set<string>>(new Set());
+  const loadAttemptRef = useRef(0);
+  const autoLoginAttemptRef = useRef<number | null>(null);
   const params = useLocalSearchParams<{ user?: string }>();
   const [canGoBack, setCanGoBack] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -194,39 +196,6 @@ export default function Ganh3dScreen() {
     }
   };
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-
-    const onHardwareBack = () => {
-      if (isExpanded) {
-        setIsExpanded(false);
-        lockPortrait().catch(() => {});
-        return true;
-      }
-
-      if (canGoBack) {
-        webViewRef.current?.goBack();
-        return true;
-      }
-
-      router.back();
-      return true;
-    };
-
-    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
-    return () => sub.remove();
-  }, [canGoBack, isExpanded, router]);
-
-  useEffect(() => {
-    return () => {
-      lockPortrait().catch(() => {});
-    };
-  }, []);
-
-  const handleExitToIntro = () => {
-    router.replace('/intro' as any);
-  };
-
   const switchToBackupUrl = () => {
     if (didSwitchToBackupUrl) return;
     setDidSwitchToBackupUrl(true);
@@ -237,32 +206,20 @@ export default function Ganh3dScreen() {
   const autoLoginScript = useMemo(() => {
     const user = JSON.stringify(username);
     const pass = JSON.stringify(PASSWORD);
-    const doneKey = `${AUTO_LOGIN_DONE_PREFIX}${encodeURIComponent(username)}`;
 
     return `
 (function() {
   var username = ${user};
   var password = ${pass};
-  var doneKey = ${JSON.stringify(doneKey)};
 
   function hasLoggedInCookie() {
     return /(?:^|;\\s*)wordpress_logged_in_/i.test(document.cookie || '');
   }
 
   function isLoggedIn() {
-    try {
-      if (window.localStorage.getItem(doneKey) === '1') return true;
-    } catch {}
-
     if (hasLoggedInCookie()) return true;
 
     return !!document.querySelector('a[href*="user-logout"], a[href*="logout"], .logged-in, .user-logout');
-  }
-
-  function markDone() {
-    try {
-      window.localStorage.setItem(doneKey, '1');
-    } catch {}
   }
 
   function openLoginUI() {
@@ -335,7 +292,6 @@ export default function Ganh3dScreen() {
 
   function runOnce() {
     if (isLoggedIn()) {
-      markDone();
       return true;
     }
 
@@ -343,7 +299,6 @@ export default function Ganh3dScreen() {
 
     setTimeout(function() {
       if (isLoggedIn()) {
-        markDone();
         return;
       }
 
@@ -351,7 +306,6 @@ export default function Ganh3dScreen() {
 
       setTimeout(function() {
         if (isLoggedIn()) {
-          markDone();
           return;
         }
 
@@ -375,11 +329,120 @@ true;
 `;
   }, [username]);
 
-  const runAutoLoginOnce = () => {
-    if (autoLoginDoneRef.current.has(username)) return;
-    autoLoginDoneRef.current.add(username);
+  const autoLogoutScript = useMemo(() => {
+    const doneKey = `${AUTO_LOGIN_DONE_PREFIX}${encodeURIComponent(username)}`;
+
+    return `
+(function() {
+  function clickLogoutLink() {
+    var logoutBtn = document.querySelector('a[href*="user-logout"], a[href*="logout"], button[data-action*="logout"], button[data-logout], .user-logout');
+    if (logoutBtn) {
+      logoutBtn.click();
+      return true;
+    }
+
+    return false;
+  }
+
+  function submitLogoutForm() {
+    var form = document.querySelector('form[action*="logout"], form#logout, form.logout');
+    if (form) {
+      form.submit();
+      return true;
+    }
+
+    return false;
+  }
+
+  function tryLogout() {
+    if (clickLogoutLink()) {
+      return true;
+    }
+
+    if (submitLogoutForm()) {
+      return true;
+    }
+
+    try {
+      fetch('/?action=logout', { credentials: 'include', cache: 'no-store' }).catch(function() {});
+    } catch {}
+
+    return false;
+  }
+
+  tryLogout();
+})();
+true;
+`;
+  }, [username]);
+
+  const runAutoLoginOnce = useCallback(() => {
+    if (autoLoginAttemptRef.current === loadAttemptRef.current) return;
+    autoLoginAttemptRef.current = loadAttemptRef.current;
     webViewRef.current?.injectJavaScript(autoLoginScript);
-  };
+  }, [autoLoginScript]);
+
+  const runAutoLogoutOnce = useCallback(() => {
+    webViewRef.current?.injectJavaScript(autoLogoutScript);
+  }, [autoLogoutScript]);
+
+  const handleExitToIntro = useCallback(() => {
+    runAutoLogoutOnce();
+    setTimeout(() => {
+      router.replace('/intro' as any);
+    }, 250);
+  }, [router, runAutoLogoutOnce]);
+
+  const handleExitToPrevious = useCallback(() => {
+    runAutoLogoutOnce();
+    setTimeout(() => {
+      router.back();
+    }, 250);
+  }, [router, runAutoLogoutOnce]);
+
+  useFocusEffect(
+    useCallback(() => {
+      autoLoginAttemptRef.current = null;
+
+      const timer = setTimeout(() => {
+        runAutoLoginOnce();
+      }, 250);
+
+      return () => {
+        clearTimeout(timer);
+      };
+    }, [runAutoLoginOnce])
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const onHardwareBack = () => {
+      if (isExpanded) {
+        setIsExpanded(false);
+        lockPortrait().catch(() => {});
+        return true;
+      }
+
+      if (canGoBack) {
+        webViewRef.current?.goBack();
+        return true;
+      }
+
+      handleExitToPrevious();
+      return true;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onHardwareBack);
+    return () => sub.remove();
+  }, [canGoBack, handleExitToPrevious, isExpanded]);
+
+  useEffect(() => {
+    return () => {
+      runAutoLogoutOnce();
+      lockPortrait().catch(() => {});
+    };
+  }, [runAutoLogoutOnce]);
 
     const handleWebMessage = (event: any) => {
       const raw = event?.nativeEvent?.data;
@@ -449,7 +512,11 @@ true;
                   mediaPlaybackRequiresUserAction={false}
                   mixedContentMode="always"
                   thirdPartyCookiesEnabled
-                  onLoadStart={() => setLoading(true)}
+                  onLoadStart={() => {
+                    loadAttemptRef.current += 1;
+                    autoLoginAttemptRef.current = null;
+                    setLoading(true);
+                  }}
                   onLoadEnd={() => {
                     setLoading(false);
                     runAutoLoginOnce();

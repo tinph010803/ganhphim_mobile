@@ -80,8 +80,10 @@ function FeatureCard({
 
 const LOGOS = {
     ganhGiaiTri: 'https://img.upanhnhanh.com/d8d7ada8c26081ef68c5f6af04d61982',
-    // ganhPhim: 'https://img.upanhnhanh.com/59d8b08a46a15c8b4e1ca6f766fa8afa',
-    ganhPhim:'https://res.cloudinary.com/df2amyjzw/image/upload/v1775885578/ganhcinema_lwwhwy.png',
+    ganhPhim: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775885578/ganhcinema_lwwhwy.png',
+    ganhPhim2: 'https://img.upanhnhanh.com/59d8b08a46a15c8b4e1ca6f766fa8afa',
+    onflix: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775905493/logoonflix_bg8k3v.png',
+    motchilltv: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775905558/logo_mx7bjo.png',
     ganh88: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775745095/ganhgame_g8zdu4.png',
     thanhGanhManga: 'https://img.upanhnhanh.com/c1b2b67d909a03f92e233092ed4b56fd',
     ganhTheThao: 'https://img.upanhnhanh.com/7f20bbdd8347a97d368892053626bff2',
@@ -120,6 +122,27 @@ const GANH3D_PROFILES = [
     },
 ] as const;
 
+const CINEMA_PROFILES = [
+    {
+        id: 'ganh-phim',
+        name: 'Gánh Phim',
+        logo: LOGOS.ganhPhim2,
+        active: true,
+    },
+    {
+        id: 'onflix',
+        name: 'Onflix',
+        logo: LOGOS.onflix,
+        active: true,
+    },
+    {
+        id: 'motchilltv',
+        name: 'MotchillTV',
+        logo: LOGOS.motchilltv,
+        active: true,
+    },
+] as const;
+
 export default function IntroScreen() {
     const router = useRouter();
     const scrollRef = useRef<ScrollView>(null);
@@ -127,6 +150,7 @@ export default function IntroScreen() {
     const [openDocId, setOpenDocId] = useState<'good-standing' | 'business' | null>(null);
     const [showSportsGate, setShowSportsGate] = useState(false);
     const [sportsTermsAccepted, setSportsTermsAccepted] = useState(false);
+    const [showCinemaGate, setShowCinemaGate] = useState(false);
     const [showGanh18Gate, setShowGanh18Gate] = useState(false);
     const [lockedGanh3dUser, setLockedGanh3dUser] = useState<string | null>(null);
     const currentDate = useMemo(() => {
@@ -153,6 +177,24 @@ export default function IntroScreen() {
 
         setShowSportsGate(false);
         router.push('/ganhthethao' as any);
+    };
+
+    const handleSelectCinemaProfile = (profileId: string) => {
+        setShowCinemaGate(false);
+
+        if (profileId === 'ganh-phim') {
+            router.replace('/(tabs)' as any);
+            return;
+        }
+
+        if (profileId === 'onflix') {
+            router.push('/onflix' as any);
+            return;
+        }
+
+        if (profileId === 'motchilltv') {
+            router.push('/motchiltv' as any);
+        }
     };
 
     const handleSelectGanh3dProfile = (username: string) => {
@@ -233,10 +275,10 @@ export default function IntroScreen() {
                             <View style={styles.cardsContainer}>
                                 <FeatureCard
                                     title={<Image source={{ uri: LOGOS.ganhPhim }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
-                                    description="Xem phim miễn phí tốc độ nhanh, giao diện tối ưu cho trải nghiệm di động."
+                                    description="Gánh Cinema là nơi tổng hợp nhiều nguồn phim khác nhau, cập nhật liên tục và tối ưu cho trải nghiệm."
                                     action="Xem ngay"
                                     backgroundImage={BACKGROUNDS.ganhPhim}
-                                    onPress={() => router.replace('/(tabs)')}
+                                    onPress={() => setShowCinemaGate(true)}
                                 />
                                 <FeatureCard
                                     title={<Image source={{ uri: LOGOS.ganh3d }} style={styles.cardTitleLogo} contentFit="contain" contentPosition="left" />}
@@ -480,6 +522,50 @@ export default function IntroScreen() {
                                 <Text style={[styles.sportsGateContinueText, !sportsTermsAccepted && styles.sportsGateContinueTextDisabled]}>
                                     Tiếp tục
                                 </Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                ) : null}
+
+                {showCinemaGate ? (
+                    <View style={styles.cinemaGateOverlay}>
+                        <View style={styles.cinemaGateCard}>
+                            <Pressable
+                                onPress={() => setShowCinemaGate(false)}
+                                style={({ pressed }) => [styles.cinemaGateCloseBtn, pressed && styles.cinemaGateCloseBtnPressed]}
+                            >
+                                <Text style={styles.cinemaGateCloseText}>X</Text>
+                            </Pressable>
+
+                            <Text style={styles.cinemaGateTitle}>Gánh Cinema</Text>
+                            <Text style={styles.cinemaGateSubtitle}>
+                                Gánh Cinema là nơi tổng hợp nhiều nguồn phim khác nhau, cập nhật liên tục và tối ưu cho trải nghiệm.
+                            </Text>
+
+                            <View style={styles.cinemaProfilesRow}>
+                                {CINEMA_PROFILES.map((profile) => (
+                                    <Pressable
+                                        key={profile.id}
+                                        onPress={() => handleSelectCinemaProfile(profile.id)}
+                                        disabled={false}
+                                        style={({ pressed }) => [
+                                            styles.cinemaProfileItem,
+                                            pressed && styles.cinemaProfileItemPressed,
+                                        ]}
+                                    >
+                                        <View style={styles.cinemaProfileLogoWrap}>
+                                            <Image source={{ uri: profile.logo }} style={styles.cinemaProfileLogo} contentFit="contain" />
+                                        </View>
+                                        <Text style={styles.cinemaProfileName}>{profile.name}</Text>
+                                    </Pressable>
+                                ))}
+                            </View>
+
+                            <Pressable
+                                onPress={() => setShowCinemaGate(false)}
+                                style={({ pressed }) => [styles.cinemaGateContinueBtn, pressed && styles.cinemaGateContinueBtnPressed]}
+                            >
+                                <Text style={styles.cinemaGateContinueText}>Đóng</Text>
                             </Pressable>
                         </View>
                     </View>
@@ -970,6 +1056,105 @@ const styles = StyleSheet.create({
     },
     sportsGateContinueTextDisabled: {
         color: '#A6B2D2',
+    },
+    cinemaGateOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(4, 10, 28, 0.76)',
+        paddingHorizontal: 18,
+        justifyContent: 'center',
+    },
+    cinemaGateCard: {
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: '#425EA5',
+        backgroundColor: '#0D1D4E',
+        padding: 14,
+        gap: 12,
+    },
+    cinemaGateCloseBtn: {
+        alignSelf: 'flex-end',
+        width: 30,
+        height: 30,
+        borderRadius: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#203A7B',
+    },
+    cinemaGateCloseBtnPressed: {
+        opacity: 0.82,
+    },
+    cinemaGateCloseText: {
+        color: '#EEF3FF',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    cinemaGateTitle: {
+        color: '#F1F3F8',
+        fontSize: 24,
+        lineHeight: 30,
+        fontWeight: '800',
+        textAlign: 'center',
+    },
+    cinemaGateSubtitle: {
+        color: '#B8C4E4',
+        fontSize: 13,
+        lineHeight: 19,
+        textAlign: 'center',
+        marginTop: -4,
+    },
+    cinemaProfilesRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 10,
+    },
+    cinemaProfileItem: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    cinemaProfileItemPressed: {
+        opacity: 0.84,
+    },
+    cinemaProfileLogoWrap: {
+        width: '100%',
+        minHeight: 84,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#333948',
+        backgroundColor: '#111A31',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+        paddingVertical: 10,
+    },
+    cinemaProfileLogo: {
+        width: '100%',
+        height: 42,
+    },
+    cinemaProfileName: {
+        marginTop: 8,
+        color: '#F1F3F8',
+        fontSize: 14,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+    cinemaGateContinueBtn: {
+        marginTop: 2,
+        backgroundColor: '#171922',
+        borderWidth: 1,
+        borderColor: '#3A3F4F',
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+    },
+    cinemaGateContinueBtnPressed: {
+        opacity: 0.88,
+    },
+    cinemaGateContinueText: {
+        color: '#D0D5E2',
+        fontSize: 15,
+        fontWeight: '700',
     },
     ganh18GateOverlay: {
         ...StyleSheet.absoluteFillObject,
