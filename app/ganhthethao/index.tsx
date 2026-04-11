@@ -5,8 +5,9 @@ import { useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import { ChevronLeft, RefreshCw, X } from 'lucide-react-native';
+import { loadSportsUrl } from '@/lib/appConfig';
 
-const SPORTS_URL = 'https://demnaylivevn.com/';
+const SPORTS_URL = 'https://demnaylive.my/';
 const SPORTS_LOGO = 'https://img.upanhnhanh.com/7f20bbdd8347a97d368892053626bff2';
 const OPEN_IN_SAME_WEBVIEW_SCRIPT = `
 (() => {
@@ -20,6 +21,26 @@ const OPEN_IN_SAME_WEBVIEW_SCRIPT = `
         }
     };
 
+    const readFullscreenState = () => {
+        const video = document.querySelector('video');
+        return !!(
+            document.fullscreenElement ||
+            document.webkitFullscreenElement ||
+            document.mozFullScreenElement ||
+            document.msFullscreenElement ||
+            (video && video.webkitDisplayingFullscreen)
+        );
+    };
+
+    let lastFullscreen = false;
+
+    const syncFullscreenState = () => {
+        const isFullscreen = readFullscreenState();
+        if (isFullscreen === lastFullscreen) return;
+        lastFullscreen = isFullscreen;
+        post(isFullscreen ? 'fullscreen-enter' : 'fullscreen-exit');
+    };
+
     const emitFullscreenState = () => {
         const isFullscreen = !!(
             document.fullscreenElement ||
@@ -27,6 +48,7 @@ const OPEN_IN_SAME_WEBVIEW_SCRIPT = `
             document.mozFullScreenElement ||
             document.msFullscreenElement
         );
+        lastFullscreen = isFullscreen;
         post(isFullscreen ? 'fullscreen-enter' : 'fullscreen-exit');
     };
 
@@ -37,6 +59,12 @@ const OPEN_IN_SAME_WEBVIEW_SCRIPT = `
 
     document.addEventListener('webkitbeginfullscreen', () => post('fullscreen-enter'), true);
     document.addEventListener('webkitendfullscreen', () => post('fullscreen-exit'), true);
+
+    setInterval(syncFullscreenState, 300);
+    window.addEventListener('resize', syncFullscreenState, true);
+
+    setTimeout(syncFullscreenState, 100);
+    setTimeout(syncFullscreenState, 500);
 
     const go = (url) => {
         if (!url || typeof url !== 'string') return;
@@ -80,6 +108,7 @@ export default function GanhTheThaoScreen() {
     const webViewRef = useRef<WebView>(null);
     const [canGoBack, setCanGoBack] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [sportsUrl, setSportsUrl] = useState<string | null>(null);
 
     const lockLandscape = async () => {
         try {
@@ -131,6 +160,21 @@ export default function GanhTheThaoScreen() {
         };
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            const url = await loadSportsUrl(SPORTS_URL);
+            if (!cancelled) {
+                setSportsUrl(url);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const handleWebMessage = (event: any) => {
         const raw = event?.nativeEvent?.data;
         if (!raw) return;
@@ -178,39 +222,41 @@ export default function GanhTheThaoScreen() {
             </View>
 
             <View style={styles.webviewWrap}>
-                <WebView
-                    ref={webViewRef}
-                    source={{ uri: SPORTS_URL }}
-                    style={styles.webview}
-                    originWhitelist={['*']}
-                    setSupportMultipleWindows={false}
-                    injectedJavaScriptBeforeContentLoaded={OPEN_IN_SAME_WEBVIEW_SCRIPT}
-                    injectedJavaScript={OPEN_IN_SAME_WEBVIEW_SCRIPT}
-                    javaScriptEnabled
-                    domStorageEnabled
-                    startInLoadingState={false}
-                    allowsFullscreenVideo
-                    allowsInlineMediaPlayback
-                    mediaPlaybackRequiresUserAction={false}
-                    mixedContentMode="always"
-                    thirdPartyCookiesEnabled
-                    onLoadStart={() => setLoading(true)}
-                    onLoadEnd={() => setLoading(false)}
-                    onLoadProgress={({ nativeEvent }) => {
-                        if (nativeEvent.progress > 0.3) {
-                            setLoading(false);
+                {sportsUrl ? (
+                    <WebView
+                        ref={webViewRef}
+                        source={{ uri: sportsUrl }}
+                        style={styles.webview}
+                        originWhitelist={['*']}
+                        setSupportMultipleWindows={false}
+                        injectedJavaScriptBeforeContentLoaded={OPEN_IN_SAME_WEBVIEW_SCRIPT}
+                        injectedJavaScript={OPEN_IN_SAME_WEBVIEW_SCRIPT}
+                        javaScriptEnabled
+                        domStorageEnabled
+                        startInLoadingState={false}
+                        allowsFullscreenVideo
+                        allowsInlineMediaPlayback
+                        mediaPlaybackRequiresUserAction={false}
+                        mixedContentMode="always"
+                        thirdPartyCookiesEnabled
+                        onLoadStart={() => setLoading(true)}
+                        onLoadEnd={() => setLoading(false)}
+                        onLoadProgress={({ nativeEvent }) => {
+                            if (nativeEvent.progress > 0.3) {
+                                setLoading(false);
+                            }
+                        }}
+                        onNavigationStateChange={(state) => setCanGoBack(state.canGoBack)}
+                        onMessage={handleWebMessage}
+                        userAgent={
+                            Platform.OS === 'android'
+                                ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+                                : 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
                         }
-                    }}
-                    onNavigationStateChange={(state) => setCanGoBack(state.canGoBack)}
-                    onMessage={handleWebMessage}
-                    userAgent={
-                        Platform.OS === 'android'
-                            ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-                            : 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
-                    }
-                />
+                    />
+                ) : null}
 
-                {loading ? (
+                {loading || !sportsUrl ? (
                     <View style={styles.loaderOverlay}>
                         <ActivityIndicator size="large" color="#F3D061" />
                         <Text style={styles.loaderText}>Đang tải...</Text>
