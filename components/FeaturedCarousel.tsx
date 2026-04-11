@@ -15,7 +15,7 @@ import { Video, ResizeMode } from 'expo-av';
 import { Movie } from '@/types/movie';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { getMovieBySlug } from '@/lib/ophim';
+import { getMovieBySlug, prefetchMovieBySlug } from '@/lib/ophim';
 import { FeaturedOverride, FEATURED_OVERRIDES } from '@/lib/featuredOverrides';
 import { Volume1, VolumeX } from 'lucide-react-native';
 
@@ -146,8 +146,12 @@ const BannerSlide = memo(function BannerSlide({
     router.push({ pathname: '/movie/[id]', params: { id: slug } });
   }, [router, slug]);
 
+  const handlePressIn = useCallback(() => {
+    prefetchMovieBySlug(slug);
+  }, [slug]);
+
   return (
-    <TouchableOpacity activeOpacity={0.95} style={styles.slide} onPress={handlePress}>
+    <TouchableOpacity activeOpacity={0.95} style={styles.slide} onPress={handlePress} onPressIn={handlePressIn}>
 
       {hasTrailer ? (
         <View style={StyleSheet.absoluteFill}>

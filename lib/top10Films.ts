@@ -30,7 +30,10 @@ export async function getTop10Films(): Promise<Movie[]> {
     const slugs = await loadTop10Slugs();
     if (slugs && slugs.length > 0) {
       const results = await Promise.all(slugs.map((s) => getMovieBySlug(s)));
-      return results.filter(Boolean) as Movie[];
+      const movies = results.filter(Boolean) as Movie[];
+      if (movies.length > 0) {
+        return movies;
+      }
     }
   } catch {}
   // Fallback: 10 phim lẻ mới nhất

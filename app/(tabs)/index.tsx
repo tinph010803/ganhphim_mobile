@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import { GENRES } from '@/constants/filters';
 import { getHomeMovies, getMoviesByCountry, getMoviesByType } from '@/lib/ophim';
+import { prefetchMovieBySlug } from '@/lib/ophim';
 import { getTop10Films } from '@/lib/top10Films';
 import { Movie } from '@/types/movie';
 import { FeaturedCarousel } from '@/components/FeaturedCarousel';
@@ -36,10 +37,16 @@ const TOP10_LIST_PADDING = 16;
 
 const Top10Card = memo(function Top10Card({ item, index }: { item: Movie; index: number }) {
   const router = useRouter();
+  const targetId = item.slug || item.id;
+
+  const handlePressIn = useCallback(() => {
+    if (!targetId) return;
+    prefetchMovieBySlug(targetId);
+  }, [targetId]);
+
   const handlePress = useCallback(() => {
-    const id = item.slug || item.id;
-    if (id) router.push({ pathname: '/movie/[id]', params: { id } });
-  }, [item.slug, item.id]);
+    if (targetId) router.push({ pathname: '/movie/[id]', params: { id: targetId } });
+  }, [targetId]);
   const LT_PATTERN = /lồng tiếng|lồng\s*tiếng|long\s*tieng|dubbed/i;
   const TM_PATTERN = /thuyết minh|thuyet\s*minh/i;
   const SUB_PATTERN = /vietsub|phụ đề|phu\s*de/i;
@@ -77,6 +84,7 @@ const Top10Card = memo(function Top10Card({ item, index }: { item: Movie; index:
     <TouchableOpacity
       style={styles.top10Card}
       activeOpacity={0.75}
+      onPressIn={handlePressIn}
       onPress={handlePress}
     >
       <View style={styles.top10ImageWrap}>

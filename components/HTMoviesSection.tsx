@@ -33,21 +33,31 @@ export function HTMoviesSection({ homeReady }: HTMoviesSectionProps) {
     if (!homeReady) return; // chờ home load xong mới fetch
     (async () => {
       try {
-        const { data } = await supabase
+        const orderedQuery = await supabase
           .from('ht_servers')
           .select('movie_slug')
           .order('created_at', { ascending: false });
+
+        const fallbackQuery = orderedQuery.error
+          ? await supabase.from('ht_servers').select('movie_slug')
+          : null;
+
+        const data = orderedQuery.data ?? fallbackQuery?.data;
 
         if (!data?.length) return;
 
         const slugs = [...new Set(data.map((r) => r.movie_slug))].slice(0, 10);
 
-        const results = await Promise.allSettled(slugs.map((slug) => getMovieBySlug(slug)));
-
-        const fetched = results
-          .filter((r): r is PromiseFulfilledResult<Movie | null> => r.status === 'fulfilled')
-          .map((r) => r.value)
-          .filter((m): m is Movie => m !== null);
+        const fetched: Movie[] = [];
+        for (let i = 0; i < slugs.length; i += 4) {
+          const batch = slugs.slice(i, i + 4);
+          const results = await Promise.allSettled(batch.map((slug) => getMovieBySlug(slug)));
+          results.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value) {
+              fetched.push(result.value);
+            }
+          });
+        }
 
         setMovies(fetched);
       } catch (e) {

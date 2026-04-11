@@ -42,11 +42,13 @@ import Svg, { Path as SvgPath } from 'react-native-svg';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { CastMember, getTMDBCast, searchTMDB } from '@/lib/tmdb';
 import { WebView } from 'react-native-webview';
+import { stashPlayerServers } from '@/lib/playerSession';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const POSTER_WIDTH = SCREEN_WIDTH * 0.44;
 const POSTER_HEIGHT = POSTER_WIDTH * 1.5;
+const EPISODE_CHUNK_SIZE = 100;
 const TABS = ['Tập phim', 'Gallery', 'Trailer', 'Diễn viên', 'Đề xuất'];
 
 function isUuid(value: string): boolean {
@@ -109,11 +111,12 @@ export default function MovieDetailScreen() {
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const gtavnMovieIdRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [playerParams, setPlayerParams] = useState<{ url: string; title: string; episode: string; movieId: string; movieSlug: string; serverLabel: string; poster: string; initialTime?: string; servers?: string } | null>(null);
+  const [playerParams, setPlayerParams] = useState<{ url: string; title: string; episode: string; movieId: string; movieSlug: string; serverLabel: string; poster: string; initialTime?: string; serversKey?: string } | null>(null);
   const [infoExpanded, setInfoExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('Tập phim');
   const [selectedServerIdx, setSelectedServerIdx] = useState(0);
   const [selectedMachineIdx, setSelectedMachineIdx] = useState(0);
+  const [selectedEpisodeChunkIdx, setSelectedEpisodeChunkIdx] = useState(0);
   const [serverDropdownOpen, setServerDropdownOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [spoiler, setSpoiler] = useState(false);
@@ -252,6 +255,7 @@ export default function MovieDetailScreen() {
   useEffect(() => {
     setSelectedServerIdx(0);
     setSelectedMachineIdx(0);
+    setSelectedEpisodeChunkIdx(0);
     setServerDropdownOpen(false);
   }, [movie?.id]);
 
@@ -378,6 +382,8 @@ export default function MovieDetailScreen() {
     }
     if (!targetUrl) return;
 
+    const serversKey = stashPlayerServers(servers as any);
+
     setPlayerParams({
       url: targetUrl,
       title: movie.title ?? '',
@@ -386,7 +392,7 @@ export default function MovieDetailScreen() {
       movieSlug: id ?? '',
       serverLabel: targetServer,
       poster: movie.thumb_url ?? '',
-      servers: JSON.stringify(servers),
+      serversKey,
       initialTime: String(Math.floor(Number(resumeTime) || 0)),
     });
   }, [movie, resumeTime, resumeEpisode, resumeServer]);
@@ -500,6 +506,8 @@ export default function MovieDetailScreen() {
       ? movie!.servers!
       : (movie?.episodes_data ? [{ name: srvLabel || 'Vietsub #1', episodes: movie.episodes_data }] : []);
 
+    const serversKey = stashPlayerServers(srvData as any);
+
     setPlayerParams({
       url: finalUrl,
       title: movie?.title ?? '',
@@ -508,7 +516,7 @@ export default function MovieDetailScreen() {
       movieSlug: id ?? '',
       serverLabel: srvLabel ?? '',
       poster: movie?.thumb_url ?? '',
-      servers: JSON.stringify(srvData),
+      serversKey,
       ...(startTime && startTime > 0 ? { initialTime: String(Math.floor(startTime)) } : {}),
     });
   };
@@ -543,6 +551,42 @@ export default function MovieDetailScreen() {
     }
   };
 
+  const firstServerName = movie?.servers?.[0]?.name ?? '';
+  const firstEpisode = movie?.episodes_data?.[0];
+  const firstEpisodePreferEmbed = /\[(NC|HT)\]/i.test(firstServerName);
+  const firstEpisodeUrl = firstEpisodePreferEmbed
+    ? (firstEpisode?.link_embed || firstEpisode?.link_m3u8 || movie?.stream_url || '')
+    : (firstEpisode?.link_m3u8 || firstEpisode?.link_embed || movie?.stream_url || '');
+  const firstEpisodeName = movie?.episodes_data?.[0]?.name || '';
+
+  const selectedMachine = serverMachines[selectedMachineIdx] ?? serverMachines[0];
+  const variantIndexes = selectedMachine?.serverIndexes ?? [0];
+  const effectiveServerIdx =
+    variantIndexes.includes(selectedServerIdx) ? selectedServerIdx : (variantIndexes[0] ?? 0);
+  const currentEps = movieServers[effectiveServerIdx]?.episodes ?? [];
+
+  const episodeChunks = useMemo(() => {
+    if (currentEps.length === 0) return [] as { label: string; episodes: any[] }[];
+    const chunks: { label: string; episodes: any[] }[] = [];
+    for (let start = 0; start < currentEps.length; start += EPISODE_CHUNK_SIZE) {
+      const end = Math.min(start + EPISODE_CHUNK_SIZE, currentEps.length);
+      chunks.push({
+        label: `${String(start + 1).padStart(2, '0')} - ${String(end).padStart(2, '0')}`,
+        episodes: currentEps.slice(start, end),
+      });
+    }
+    return chunks;
+  }, [currentEps]);
+
+  const clampedChunkIdx = Math.min(selectedEpisodeChunkIdx, Math.max(episodeChunks.length - 1, 0));
+  const visibleEpisodes = episodeChunks.length > 0
+    ? (episodeChunks[clampedChunkIdx]?.episodes ?? [])
+    : currentEps;
+
+  useEffect(() => {
+    setSelectedEpisodeChunkIdx(0);
+  }, [effectiveServerIdx]);
+
   if (playerParams) {
     return <View style={{ flex: 1, backgroundColor: '#000' }} />;
   }
@@ -559,14 +603,6 @@ export default function MovieDetailScreen() {
       </SafeAreaView>
     );
   }
-
-  const firstServerName = movie.servers?.[0]?.name ?? '';
-  const firstEpisode = movie.episodes_data?.[0];
-  const firstEpisodePreferEmbed = /\[(NC|HT)\]/i.test(firstServerName);
-  const firstEpisodeUrl = firstEpisodePreferEmbed
-    ? (firstEpisode?.link_embed || firstEpisode?.link_m3u8 || movie.stream_url || '')
-    : (firstEpisode?.link_m3u8 || firstEpisode?.link_embed || movie.stream_url || '');
-  const firstEpisodeName = movie.episodes_data?.[0]?.name || '';
 
   return (
     <View style={styles.container}>
@@ -768,11 +804,6 @@ export default function MovieDetailScreen() {
         <View style={styles.tabContent}>
           {/* Ngoại trừ phim THỎ ƠI */}
           {activeTab === 'Tập phim' && (movie.status !== 'trailer' || movie.slug === 'tho-oi') && (() => {
-            const selectedMachine = serverMachines[selectedMachineIdx] ?? serverMachines[0];
-            const variantIndexes = selectedMachine?.serverIndexes ?? [0];
-            const effectiveServerIdx =
-              variantIndexes.includes(selectedServerIdx) ? selectedServerIdx : (variantIndexes[0] ?? 0);
-            const currentEps = movieServers[effectiveServerIdx]?.episodes ?? [];
             return (
               <View>
                 {/* Server dropdown */}
@@ -853,10 +884,32 @@ export default function MovieDetailScreen() {
                   </Text>
                 )}
 
+                {episodeChunks.length > 1 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.chunkRow}
+                  >
+                    {episodeChunks.map((chunk, idx) => {
+                      const isActive = idx === clampedChunkIdx;
+                      return (
+                        <TouchableOpacity
+                          key={chunk.label}
+                          style={[styles.chunkChip, isActive && styles.chunkChipActive]}
+                          onPress={() => setSelectedEpisodeChunkIdx(idx)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.chunkChipText, isActive && styles.chunkChipTextActive]}>{chunk.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+
                 {/* Episode grid */}
                 {currentEps.length > 0 ? (
                   <View style={styles.episodeGrid}>
-                    {currentEps.map((ep) => (
+                    {visibleEpisodes.map((ep) => (
                       <TouchableOpacity
                         key={ep.name}
                         style={styles.episodeBtn}
@@ -1327,6 +1380,30 @@ const styles = StyleSheet.create({
   },
   sourceChipTextActive: {
     color: '#fff',
+  },
+  chunkRow: {
+    gap: 8,
+    paddingBottom: 10,
+  },
+  chunkChip: {
+    backgroundColor: '#1A2134',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  chunkChipActive: {
+    backgroundColor: '#22C55E',
+    borderColor: '#22C55E',
+  },
+  chunkChipText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  chunkChipTextActive: {
+    color: '#102114',
   },
 
   episodeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },

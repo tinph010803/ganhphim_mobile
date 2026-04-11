@@ -9,6 +9,9 @@ const HOME_CACHE_TTL = 5 * 60 * 1000;
 let homeCache: { data: Movie[]; expiresAt: number } | null = null;
 let homePendingPromise: Promise<Movie[]> | null = null;
 const detailCache = new Map<string, Movie>();
+const detailPendingCache = new Map<string, Promise<Movie | null>>();
+const detailEnrichPendingCache = new Map<string, Promise<void>>();
+const EXTERNAL_SOURCE_TIMEOUT_MS = 2500;
 
 type OPhimResponse = {
   data?: {
@@ -388,6 +391,32 @@ async function resolveNguoncMovieForOphim(
   }
 
   return fetchNguoncMovieBySlug(exact.slug);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(fallbackValue);
+      }
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(fallbackValue);
+      });
+  });
 }
 
 function shouldMergeKKMovie(ophimRaw: Record<string, unknown>, kkMovie: KKMoviePayload): boolean {
@@ -845,102 +874,206 @@ export async function getMovieBySlug(slug: string): Promise<Movie | null> {
     return cached;
   }
 
-  let item = await fetchOPhimItemBySlugSafe(slug);
-  let kk: KKDetailResponse | null = null;
-  let nc: NguoncDetailResponse | null = null;
+  const pending = detailPendingCache.get(slug);
+  if (pending) {
+    return pending;
+  }
 
-  const initialOrigin = String(item?.origin_name || item?.name || slug);
-  [kk, nc] = await Promise.all([
-    resolveKKMovieForOphim(slug, initialOrigin),
-    resolveNguoncMovieForOphim(slug, initialOrigin),
-  ]);
+  const loadingPromise = (async () => {
+    const item = await fetchOPhimItemBySlugSafe(slug);
 
-  // If entry slug is KK/NC-only, try to map back to OPhim by origin name.
-  if (!item) {
+    // Fast path: return OPhim data immediately, then enrich KK/NC in background.
+    if (item) {
+      const baseMovie = mapOPhimMovie(item);
+      detailCache.set(slug, baseMovie);
+
+      if (!detailEnrichPendingCache.has(slug)) {
+        const enrichPromise = (async () => {
+          const baseOrigin = String(item.origin_name || item.name || slug);
+          const [kk, nc] = await withTimeout(
+            Promise.all([
+              resolveKKMovieForOphim(slug, baseOrigin),
+              resolveNguoncMovieForOphim(slug, baseOrigin),
+            ]),
+            EXTERNAL_SOURCE_TIMEOUT_MS,
+            [null, null] as [KKDetailResponse | null, NguoncDetailResponse | null],
+          );
+
+          if (!kk?.movie && !nc?.movie) {
+            return;
+          }
+
+          const latest = detailCache.get(slug) ?? baseMovie;
+          let enriched = latest;
+
+          const hasKKBase = (enriched.servers || []).some((srv) => /\[KK\]/i.test(srv.name || ''));
+          if (!hasKKBase && kk?.movie && shouldMergeBySlugOrOrigin(item.slug, item.origin_name || item.name, kk.movie.slug, kk.movie.origin_name)) {
+            const kkServers = buildKKServers(kk.episodes);
+            if (kkServers.length > 0) {
+              const mergedServers = [...(enriched.servers || []), ...kkServers];
+              const firstEpisodes = mergedServers[0]?.episodes || [];
+              const kkTotal = toNumber(kk.movie.episode_total, 0);
+              const kkCurrent = toNumber(kk.movie.episode_current, 0);
+              const mergedCurrent = Math.max(kkCurrent, getCurrentEpisodeFromServers(mergedServers));
+
+              enriched = {
+                ...enriched,
+                servers: mergedServers,
+                episodes_data: firstEpisodes,
+                stream_url: firstEpisodes[0]?.link_m3u8 || firstEpisodes[0]?.link_embed || enriched.stream_url,
+                current_episode: Math.max(mergedCurrent, enriched.current_episode, 1),
+                episodes: Math.max(kkTotal, mergedCurrent, enriched.episodes, enriched.current_episode),
+              };
+            }
+          }
+
+          if (nc?.movie && shouldMergeBySlugOrOrigin(item.slug, item.origin_name || item.name, nc.movie.slug, nc.movie.original_name || nc.movie.name)) {
+            const ncServers = buildNguoncServers(nc.movie.episodes);
+            if (ncServers.length > 0) {
+              const mergedServers = [...(enriched.servers || []), ...ncServers];
+              const firstEpisodes = mergedServers[0]?.episodes || [];
+              const ncTotal = toNumber(nc.movie.total_episodes, 0);
+              const ncCurrent = toNumber(nc.movie.current_episode, 0);
+              const mergedCurrent = Math.max(ncCurrent, getCurrentEpisodeFromServers(mergedServers));
+
+              enriched = {
+                ...enriched,
+                servers: mergedServers,
+                episodes_data: firstEpisodes,
+                stream_url: firstEpisodes[0]?.link_m3u8 || firstEpisodes[0]?.link_embed || enriched.stream_url,
+                current_episode: Math.max(mergedCurrent, enriched.current_episode, 1),
+                episodes: Math.max(ncTotal, mergedCurrent, enriched.episodes, enriched.current_episode),
+              };
+            }
+          }
+
+          detailCache.set(slug, enriched);
+        })().finally(() => {
+          detailEnrichPendingCache.delete(slug);
+        });
+
+        detailEnrichPendingCache.set(slug, enrichPromise);
+      }
+
+      return baseMovie;
+    }
+
+    let kk: KKDetailResponse | null = null;
+    let nc: NguoncDetailResponse | null = null;
+
+    const initialOrigin = slug;
+    [kk, nc] = await withTimeout(
+      Promise.all([
+        resolveKKMovieForOphim(slug, initialOrigin),
+        resolveNguoncMovieForOphim(slug, initialOrigin),
+      ]),
+      EXTERNAL_SOURCE_TIMEOUT_MS,
+      [null, null] as [KKDetailResponse | null, NguoncDetailResponse | null],
+    );
+
+    // If entry slug is KK/NC-only, try to map back to OPhim by origin name.
+    let itemFromOrigin: Record<string, unknown> | null = null;
     const originCandidates = [
       String(kk?.movie?.origin_name || ''),
       String(nc?.movie?.original_name || nc?.movie?.name || ''),
     ].filter(Boolean);
 
     for (const candidate of originCandidates) {
-      item = await resolveOPhimMovieByOriginName(candidate);
-      if (item) break;
+      itemFromOrigin = await resolveOPhimMovieByOriginName(candidate);
+      if (itemFromOrigin) break;
     }
 
-    if (item) {
-      const resolvedOrigin = String(item.origin_name || item.name || slug);
-      const [kkResolved, ncResolved] = await Promise.all([
-        kk ?? resolveKKMovieForOphim(slug, resolvedOrigin),
-        nc ?? resolveNguoncMovieForOphim(slug, resolvedOrigin),
-      ]);
+    if (itemFromOrigin) {
+      const resolvedOrigin = String(itemFromOrigin.origin_name || itemFromOrigin.name || slug);
+      const [kkResolved, ncResolved] = await withTimeout(
+        Promise.all([
+          kk ?? resolveKKMovieForOphim(slug, resolvedOrigin),
+          nc ?? resolveNguoncMovieForOphim(slug, resolvedOrigin),
+        ]),
+        EXTERNAL_SOURCE_TIMEOUT_MS,
+        [kk, nc] as [KKDetailResponse | null, NguoncDetailResponse | null],
+      );
       kk = kkResolved;
       nc = ncResolved;
     }
-  }
 
-  if (!item && !kk?.movie && !nc?.movie) {
-    return null;
-  }
-
-  let movie: Movie;
-  let baseSlug: unknown;
-  let baseOrigin: unknown;
-
-  if (item) {
-    movie = mapOPhimMovie(item);
-    baseSlug = item.slug;
-    baseOrigin = item.origin_name || item.name;
-  } else if (kk?.movie) {
-    movie = mapKKDetailMovie(kk, slug);
-    baseSlug = kk.movie.slug || slug;
-    baseOrigin = kk.movie.origin_name || '';
-  } else {
-    movie = mapNguoncMovie(nc!.movie!, slug);
-    baseSlug = nc!.movie!.slug || slug;
-    baseOrigin = nc!.movie!.original_name || nc!.movie!.name || '';
-  }
-
-  const hasKKBase = (movie.servers || []).some((srv) => /\[KK\]/i.test(srv.name || ''));
-  if (!hasKKBase && kk?.movie && shouldMergeBySlugOrOrigin(baseSlug, baseOrigin, kk.movie.slug, kk.movie.origin_name)) {
-    const kkServers = buildKKServers(kk.episodes);
-    if (kkServers.length > 0) {
-      const mergedServers = [...(movie.servers || []), ...kkServers];
-      const firstEpisodes = mergedServers[0]?.episodes || [];
-      const kkTotal = toNumber(kk.movie.episode_total, 0);
-      const kkCurrent = toNumber(kk.movie.episode_current, 0);
-      const mergedCurrent = Math.max(kkCurrent, getCurrentEpisodeFromServers(mergedServers));
-
-      movie.servers = mergedServers;
-      movie.episodes_data = firstEpisodes;
-      movie.stream_url = firstEpisodes[0]?.link_m3u8 || firstEpisodes[0]?.link_embed || movie.stream_url;
-      movie.current_episode = Math.max(mergedCurrent, movie.current_episode, 1);
-      movie.episodes = Math.max(kkTotal, mergedCurrent, movie.episodes, movie.current_episode);
+    if (!itemFromOrigin && !kk?.movie && !nc?.movie) {
+      return null;
     }
-  }
 
-  if (nc?.movie) {
-    if (shouldMergeBySlugOrOrigin(baseSlug, baseOrigin, nc.movie.slug, nc.movie.original_name || nc.movie.name)) {
-      const ncServers = buildNguoncServers(nc.movie.episodes);
-      if (ncServers.length > 0) {
-        const mergedServers = [...(movie.servers || []), ...ncServers];
+    let movie: Movie;
+    let baseSlug: unknown;
+    let baseOrigin: unknown;
+
+    if (itemFromOrigin) {
+      movie = mapOPhimMovie(itemFromOrigin);
+      baseSlug = itemFromOrigin.slug;
+      baseOrigin = itemFromOrigin.origin_name || itemFromOrigin.name;
+    } else if (kk?.movie) {
+      movie = mapKKDetailMovie(kk, slug);
+      baseSlug = kk.movie.slug || slug;
+      baseOrigin = kk.movie.origin_name || '';
+    } else {
+      movie = mapNguoncMovie(nc!.movie!, slug);
+      baseSlug = nc!.movie!.slug || slug;
+      baseOrigin = nc!.movie!.original_name || nc!.movie!.name || '';
+    }
+
+    const hasKKBase = (movie.servers || []).some((srv) => /\[KK\]/i.test(srv.name || ''));
+    if (!hasKKBase && kk?.movie && shouldMergeBySlugOrOrigin(baseSlug, baseOrigin, kk.movie.slug, kk.movie.origin_name)) {
+      const kkServers = buildKKServers(kk.episodes);
+      if (kkServers.length > 0) {
+        const mergedServers = [...(movie.servers || []), ...kkServers];
         const firstEpisodes = mergedServers[0]?.episodes || [];
-        const ncTotal = toNumber(nc.movie.total_episodes, 0);
-        const ncCurrent = toNumber(nc.movie.current_episode, 0);
-        const mergedCurrent = Math.max(ncCurrent, getCurrentEpisodeFromServers(mergedServers));
+        const kkTotal = toNumber(kk.movie.episode_total, 0);
+        const kkCurrent = toNumber(kk.movie.episode_current, 0);
+        const mergedCurrent = Math.max(kkCurrent, getCurrentEpisodeFromServers(mergedServers));
 
         movie.servers = mergedServers;
         movie.episodes_data = firstEpisodes;
         movie.stream_url = firstEpisodes[0]?.link_m3u8 || firstEpisodes[0]?.link_embed || movie.stream_url;
         movie.current_episode = Math.max(mergedCurrent, movie.current_episode, 1);
-        movie.episodes = Math.max(ncTotal, mergedCurrent, movie.episodes, movie.current_episode);
+        movie.episodes = Math.max(kkTotal, mergedCurrent, movie.episodes, movie.current_episode);
       }
-    } else if (!item && !kk?.movie) {
-      movie = mapNguoncMovie(nc.movie, slug);
     }
-  }
 
-  detailCache.set(slug, movie);
-  return movie;
+    if (nc?.movie) {
+      if (shouldMergeBySlugOrOrigin(baseSlug, baseOrigin, nc.movie.slug, nc.movie.original_name || nc.movie.name)) {
+        const ncServers = buildNguoncServers(nc.movie.episodes);
+        if (ncServers.length > 0) {
+          const mergedServers = [...(movie.servers || []), ...ncServers];
+          const firstEpisodes = mergedServers[0]?.episodes || [];
+          const ncTotal = toNumber(nc.movie.total_episodes, 0);
+          const ncCurrent = toNumber(nc.movie.current_episode, 0);
+          const mergedCurrent = Math.max(ncCurrent, getCurrentEpisodeFromServers(mergedServers));
+
+          movie.servers = mergedServers;
+          movie.episodes_data = firstEpisodes;
+          movie.stream_url = firstEpisodes[0]?.link_m3u8 || firstEpisodes[0]?.link_embed || movie.stream_url;
+          movie.current_episode = Math.max(mergedCurrent, movie.current_episode, 1);
+          movie.episodes = Math.max(ncTotal, mergedCurrent, movie.episodes, movie.current_episode);
+        }
+      } else if (!item && !kk?.movie) {
+        movie = mapNguoncMovie(nc.movie, slug);
+      }
+    }
+
+    detailCache.set(slug, movie);
+    return movie;
+  })();
+
+  detailPendingCache.set(slug, loadingPromise);
+  try {
+    return await loadingPromise;
+  } finally {
+    detailPendingCache.delete(slug);
+  }
+}
+
+export function prefetchMovieBySlug(slug: string): void {
+  const normalized = slug?.trim();
+  if (!normalized) return;
+  void getMovieBySlug(normalized);
 }
 
 export async function getMoviesFilteredPaged(

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Movie } from '@/types/movie';
 import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
+import { prefetchMovieBySlug } from '@/lib/ophim';
 
 interface MovieCardProps {
   movie: Movie;
@@ -32,6 +33,12 @@ export const MovieCard = memo(function MovieCard({
       pathname: '/movie/[id]',
       params: { id: targetId },
     });
+  }, [movie.slug, movie.id]);
+
+  const handlePressIn = useCallback(() => {
+    const targetId = movie.slug || movie.id;
+    if (!targetId) return;
+    prefetchMovieBySlug(targetId);
   }, [movie.slug, movie.id]);
 
   const isTrailer = movie.status === 'trailer';
@@ -74,6 +81,7 @@ export const MovieCard = memo(function MovieCard({
     <TouchableOpacity
       style={[styles.container, { width }]}
       onPress={handlePress}
+      onPressIn={handlePressIn}
       activeOpacity={0.7}
     >
       <View style={styles.imageContainer}>
