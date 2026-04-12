@@ -5,6 +5,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { saveWatchProgress } from '@/lib/watchHistory';
 import { useAuth } from '@/context/AuthContext';
 import * as NavigationBar from 'expo-navigation-bar';
+import { takePlayerServers } from '@/lib/playerSession';
 
 type _SrvEp = { name: string; link_embed: string; link_m3u8: string };
 type _SrvItem = { name: string; episodes: _SrvEp[] };
@@ -903,7 +904,7 @@ export default function PlayerScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.id;
-  const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime, servers, subApiUrl } =
+  const { url, title, episode, movieId, movieSlug, serverLabel, poster, initialTime, servers, serversKey, subApiUrl } =
     useLocalSearchParams<{
       url: string;
       title: string;
@@ -914,6 +915,7 @@ export default function PlayerScreen() {
       poster?: string;
       initialTime?: string;
       servers?: string;
+      serversKey?: string;
       subApiUrl?: string;
     }>();
   const webViewRef = useRef<any>(null);
@@ -950,6 +952,13 @@ export default function PlayerScreen() {
   ) || 0;
 
   const safeServersData = (() => {
+    const key = Array.isArray(serversKey) ? serversKey[0] : (serversKey ?? '');
+    const fromSession = takePlayerServers(key);
+    if (fromSession && fromSession.length > 0) {
+      return fromSession as _SrvItem[];
+    }
+
+    // Backward compatibility: support legacy inline `servers` JSON param.
     const raw = Array.isArray(servers) ? servers[0] : (servers ?? '[]');
     try { return JSON.parse(raw) as _SrvItem[]; } catch { return [] as _SrvItem[]; }
   })();

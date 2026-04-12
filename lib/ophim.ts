@@ -11,7 +11,7 @@ let homePendingPromise: Promise<Movie[]> | null = null;
 const detailCache = new Map<string, Movie>();
 const detailPendingCache = new Map<string, Promise<Movie | null>>();
 const detailEnrichPendingCache = new Map<string, Promise<void>>();
-const EXTERNAL_SOURCE_TIMEOUT_MS = 2500;
+const EXTERNAL_SOURCE_TIMEOUT_MS = 6000;
 
 type OPhimResponse = {
   data?: {
@@ -955,7 +955,12 @@ export async function getMovieBySlug(slug: string): Promise<Movie | null> {
         detailEnrichPendingCache.set(slug, enrichPromise);
       }
 
-      return baseMovie;
+      const pendingEnrich = detailEnrichPendingCache.get(slug);
+      if (pendingEnrich) {
+        await pendingEnrich;
+      }
+
+      return detailCache.get(slug) ?? baseMovie;
     }
 
     let kk: KKDetailResponse | null = null;
