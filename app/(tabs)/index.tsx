@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  InteractionManager,
   View,
   Text,
   StyleSheet,
@@ -17,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import { GENRES } from '@/constants/filters';
 import { getHomeMovies, getMoviesByCountry, getMoviesByType } from '@/lib/ophim';
-import { prefetchMovieBySlug } from '@/lib/ophim';
+import { prefetchMovieBySlug, seedMovieDetailCache } from '@/lib/ophim';
 import { getTop10Films } from '@/lib/top10Films';
 import { Movie } from '@/types/movie';
 import { FeaturedCarousel } from '@/components/FeaturedCarousel';
@@ -34,6 +35,21 @@ const TOP10_CARD_WIDTH = 110;
 const TOP10_CARD_MARGIN = 10;
 const TOP10_ITEM_SIZE = TOP10_CARD_WIDTH + TOP10_CARD_MARGIN;
 const TOP10_LIST_PADDING = 16;
+const HOME_CACHE_KEY = '@home_screen_cache_v2';
+const HOME_CACHE_TTL_MS = 15 * 60 * 1000;
+const HOME_CACHE_MAX_STALE_MS = 2 * 60 * 60 * 1000;
+
+type HomeCachePayload = {
+  featuredMovies: Movie[];
+  top10Movies: Movie[];
+  sectionMovies: Record<string, Movie[]>;
+  cachedAt: number;
+};
+
+type HomeCacheLoadResult = {
+  payload: HomeCachePayload;
+  isFresh: boolean;
+};
 
 const Top10Card = memo(function Top10Card({ item, index }: { item: Movie; index: number }) {
   const router = useRouter();
@@ -41,8 +57,9 @@ const Top10Card = memo(function Top10Card({ item, index }: { item: Movie; index:
 
   const handlePressIn = useCallback(() => {
     if (!targetId) return;
+    seedMovieDetailCache(item);
     prefetchMovieBySlug(targetId);
-  }, [targetId]);
+  }, [targetId, item]);
 
   const handlePress = useCallback(() => {
     if (targetId) router.push({ pathname: '/movie/[id]', params: { id: targetId } });
@@ -213,6 +230,37 @@ export default function HomeScreen() {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  const loadHomeCache = useCallback(async (): Promise<HomeCacheLoadResult | null> => {
+    try {
+      const raw = await AsyncStorage.getItem(HOME_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as HomeCachePayload;
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (typeof parsed.cachedAt !== 'number') return null;
+
+      const age = Date.now() - parsed.cachedAt;
+      if (age > HOME_CACHE_MAX_STALE_MS) {
+        await AsyncStorage.removeItem(HOME_CACHE_KEY);
+        return null;
+      }
+
+      return {
+        payload: parsed,
+        isFresh: age <= HOME_CACHE_TTL_MS,
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const saveHomeCache = useCallback(async (payload: HomeCachePayload) => {
+    try {
+      await AsyncStorage.setItem(HOME_CACHE_KEY, JSON.stringify(payload));
+    } catch {
+      // Ignore cache write failures.
+    }
+  }, []);
+
   // Load trailer preference from AsyncStorage
   useEffect(() => {
     (async () => {
@@ -245,38 +293,72 @@ export default function HomeScreen() {
   }, [user]));
 
   useEffect(() => {
+    let cancelled = false;
+
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+
     (async () => {
-      // Show UI with fade animation immediately
-      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-      setHomeReady(true);
-
-      // Load featured and top10 immediately, then hydrate each section independently.
-      getHomeMovies()
-        .then((movies) => setFeaturedMovies(movies.slice(0, 8)))
-        .catch((e) => console.error('Error loading featured movies:', e));
-
-      getTop10Films()
-        .then((movies) => setTop10Movies(movies.slice(0, 10)))
-        .catch((e) => console.error('Error loading top10 movies:', e));
-
-      SECTION_CONFIGS.forEach((section) => {
-        section.fetchFn()
-          .then((movies) => {
-            setSectionMovies((prev) => ({
-              ...prev,
-              [section.key]: movies.slice(0, 12),
-            }));
-          })
-          .catch((e) => {
-            console.error(`Error loading section ${section.key}:`, e);
-            setSectionMovies((prev) => ({
-              ...prev,
-              [section.key]: [],
-            }));
-          });
-      });
+      // Hydrate from cache first so Home appears quickly.
+      const cache = await loadHomeCache();
+      if (!cancelled && cache) {
+        setFeaturedMovies(cache.payload.featuredMovies ?? []);
+        setTop10Movies(cache.payload.top10Movies ?? []);
+        setSectionMovies(cache.payload.sectionMovies ?? {});
+        setHomeReady(true);
+      }
     })();
-  }, []);
+
+    const readinessTimer = setTimeout(() => {
+      if (!cancelled) setHomeReady(true);
+    }, 1200);
+
+    const refreshTask = InteractionManager.runAfterInteractions(async () => {
+      const tasks = [
+        getHomeMovies(),
+        getTop10Films(),
+        ...SECTION_CONFIGS.map((section) => section.fetchFn()),
+      ];
+
+      const results = await Promise.allSettled(tasks);
+      if (cancelled) return;
+
+      const featured = results[0].status === 'fulfilled' ? results[0].value.slice(0, 8) : [];
+      const top10 = results[1].status === 'fulfilled' ? results[1].value.slice(0, 10) : [];
+
+      const nextSections: Record<string, Movie[]> = {};
+      SECTION_CONFIGS.forEach((section, index) => {
+        const res = results[index + 2];
+        nextSections[section.key] = res.status === 'fulfilled' ? res.value.slice(0, 12) : [];
+        if (res.status === 'rejected') {
+          console.error(`Error loading section ${section.key}:`, res.reason);
+        }
+      });
+
+      if (featured.length) setFeaturedMovies(featured);
+      if (top10.length) setTop10Movies(top10);
+      setSectionMovies(nextSections);
+
+      const hasAnyData =
+        featured.length > 0 ||
+        top10.length > 0 ||
+        Object.values(nextSections).some((items) => items.length > 0);
+
+      if (hasAnyData) {
+        saveHomeCache({
+          featuredMovies: featured,
+          top10Movies: top10,
+          sectionMovies: nextSections,
+          cachedAt: Date.now(),
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(readinessTimer);
+      refreshTask.cancel();
+    };
+  }, [fadeAnim, loadHomeCache, saveHomeCache]);
 
   const renderSection = useCallback(
     ({ item }: { item: SectionConfig }) => {

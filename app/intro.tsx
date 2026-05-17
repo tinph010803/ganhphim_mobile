@@ -94,7 +94,7 @@ const BACKGROUNDS = {
     ganhPhim: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&h=500&fit=crop',
     ganh88: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775745095/background_ganhgame_bowmpp.jpg',
     thanhGanhManga: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775825068/backgrond_ganhmanga_wi9yd4.png',
-    ganhTheThao: 'https://www.thiagiaitri.com/images/bg-thiabong.jpg',
+    ganhTheThao: 'https://play-lh.googleusercontent.com/T6oxu6MrpMrn0i8YftSZdl7LMG1YOWPZ6T8k7ly4ElJ0oWKGTNSzBcIrEyFmu4Lqk38=w526-h296-rw',
     ganh3d: 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775825490/background_ganh3d_gcgb3g.jpg',
 };
 
@@ -130,16 +130,28 @@ const CINEMA_PROFILES = [
         active: true,
     },
     {
+        id: 'ro-1',
+        name: 'Rổ 1',
+        logo: LOGOS.ganhPhim2,
+        active: true,
+    },
+    {
+        id: 'ro-2',
+        name: 'Rổ 2',
+        logo: LOGOS.ganhPhim2,
+        active: true,
+    },
+    {
         id: 'onflix',
         name: 'Onflix',
         logo: LOGOS.onflix,
-        active: true,
+        active: false,
     },
     {
         id: 'motchilltv',
         name: 'MotchillTV',
         logo: LOGOS.motchilltv,
-        active: true,
+        active: false,
     },
 ] as const;
 
@@ -184,6 +196,20 @@ export default function IntroScreen() {
 
         if (profileId === 'ganh-phim') {
             router.replace('/(tabs)' as any);
+            return;
+        }
+
+        if (profileId === 'ro-1') {
+            router.push({
+                pathname: '/ro-1' as any,
+            });
+            return;
+        }
+
+        if (profileId === 'ro-2') {
+            router.push({
+                pathname: '/ro-2' as any,
+            });
             return;
         }
 
@@ -547,16 +573,20 @@ export default function IntroScreen() {
                                     <Pressable
                                         key={profile.id}
                                         onPress={() => handleSelectCinemaProfile(profile.id)}
-                                        disabled={false}
+                                        disabled={!profile.active}
                                         style={({ pressed }) => [
                                             styles.cinemaProfileItem,
-                                            pressed && styles.cinemaProfileItemPressed,
+                                            !profile.active && styles.cinemaProfileItemDisabled,
+                                            pressed && profile.active && styles.cinemaProfileItemPressed,
                                         ]}
                                     >
-                                        <View style={styles.cinemaProfileLogoWrap}>
+                                        <View style={[styles.cinemaProfileLogoWrap, !profile.active && styles.cinemaProfileLogoWrapDisabled]}>
                                             <Image source={{ uri: profile.logo }} style={styles.cinemaProfileLogo} contentFit="contain" />
                                         </View>
-                                        <Text style={styles.cinemaProfileName}>{profile.name}</Text>
+                                        <Text style={[styles.cinemaProfileName, !profile.active && styles.cinemaProfileNameDisabled]}>
+                                            {profile.name}
+                                            {!profile.active ? ' (Soon)' : ''}
+                                        </Text>
                                     </Pressable>
                                 ))}
                             </View>
@@ -1104,16 +1134,20 @@ const styles = StyleSheet.create({
     },
     cinemaProfilesRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 10,
+        flexWrap: 'wrap',
+        gap: 8,
+        justifyContent: 'flex-start',
     },
     cinemaProfileItem: {
-        flex: 1,
+        width: '30%',
         alignItems: 'center',
+        marginRight: '1.67%',
     },
     cinemaProfileItemPressed: {
         opacity: 0.84,
+    },
+    cinemaProfileItemDisabled: {
+        opacity: 0.5,
     },
     cinemaProfileLogoWrap: {
         width: '100%',
@@ -1127,6 +1161,10 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 10,
     },
+    cinemaProfileLogoWrapDisabled: {
+        borderColor: 'rgba(51, 57, 72, 0.5)',
+        backgroundColor: '#0a0f1f',
+    },
     cinemaProfileLogo: {
         width: '100%',
         height: 42,
@@ -1137,6 +1175,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '700',
         textAlign: 'center',
+    },
+    cinemaProfileNameDisabled: {
+        color: '#8a93a8',
     },
     cinemaGateContinueBtn: {
         marginTop: 2,

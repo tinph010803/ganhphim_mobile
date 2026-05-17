@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Movie } from '@/types/movie';
 import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
-import { prefetchMovieBySlug } from '@/lib/ophim';
+import { prefetchMovieBySlug, seedMovieDetailCache } from '@/lib/ophim';
 
 interface MovieCardProps {
   movie: Movie;
@@ -38,6 +38,7 @@ export const MovieCard = memo(function MovieCard({
   const handlePressIn = useCallback(() => {
     const targetId = movie.slug || movie.id;
     if (!targetId) return;
+    seedMovieDetailCache(movie);
     prefetchMovieBySlug(targetId);
   }, [movie.slug, movie.id]);
 

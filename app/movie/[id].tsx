@@ -43,6 +43,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { CastMember, getTMDBCast, searchTMDB } from '@/lib/tmdb';
 import { WebView } from 'react-native-webview';
 import { stashPlayerServers } from '@/lib/playerSession';
+import { getCachedMovieBySlug } from '@/lib/ophim';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -105,12 +106,13 @@ export default function MovieDetailScreen() {
   }>();
   const { user, tokens } = useAuth();
   const { showToast } = useToast();
+  const cachedMovie = id ? getCachedMovieBySlug(id) : null;
   const didAutoResume = useRef(false);
-  const [movie, setMovie] = useState<Movie | null>(null);
+  const [movie, setMovie] = useState<Movie | null>(cachedMovie);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const gtavnMovieIdRef = useRef<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedMovie);
   const [playerParams, setPlayerParams] = useState<{ url: string; title: string; episode: string; movieId: string; movieSlug: string; serverLabel: string; poster: string; initialTime?: string; serversKey?: string } | null>(null);
   const [infoExpanded, setInfoExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState('Tập phim');
@@ -894,7 +896,7 @@ export default function MovieDetailScreen() {
                       const isActive = idx === clampedChunkIdx;
                       return (
                         <TouchableOpacity
-                          key={chunk.label}
+                          key={`${effectiveServerIdx}:${chunk.label}:${idx}`}
                           style={[styles.chunkChip, isActive && styles.chunkChipActive]}
                           onPress={() => setSelectedEpisodeChunkIdx(idx)}
                           activeOpacity={0.75}
@@ -909,9 +911,9 @@ export default function MovieDetailScreen() {
                 {/* Episode grid */}
                 {currentEps.length > 0 ? (
                   <View style={styles.episodeGrid}>
-                    {visibleEpisodes.map((ep) => (
+                    {visibleEpisodes.map((ep, idx) => (
                       <TouchableOpacity
-                        key={ep.name}
+                        key={`${effectiveServerIdx}:${clampedChunkIdx}:${idx}:${ep.slug || ep.name}`}
                         style={styles.episodeBtn}
                         activeOpacity={0.75}
                         onPress={() => openPlayer(
