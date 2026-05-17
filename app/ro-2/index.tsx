@@ -6,8 +6,8 @@ import { WebView } from 'react-native-webview';
 import { Image } from 'expo-image';
 import { ChevronLeft, RefreshCw, X } from 'lucide-react-native';
 import { Pressable, Text } from 'react-native';
+import { RO2_DEFAULT_URL, loadRo2Url } from '@/lib/appConfig';
 
-const RO2_URL = 'https://rophim.la';
 const RO_LOGO = 'https://img.upanhnhanh.com/59d8b08a46a15c8b4e1ca6f766fa8afa';
 const OPEN_IN_SAME_WEBVIEW_SCRIPT = `
 (() => {
@@ -108,6 +108,7 @@ export default function Ro2Screen() {
     const webViewRef = useRef<WebView>(null);
     const [canGoBack, setCanGoBack] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [ro2Url, setRo2Url] = useState(RO2_DEFAULT_URL);
 
     const lockLandscape = async () => {
         try {
@@ -156,6 +157,21 @@ export default function Ro2Screen() {
     useEffect(() => {
         return () => {
             lockPortrait().catch(() => {});
+        };
+    }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            const url = await loadRo2Url(RO2_DEFAULT_URL);
+            if (!cancelled) {
+                setRo2Url(url);
+            }
+        })();
+
+        return () => {
+            cancelled = true;
         };
     }, []);
 
@@ -208,7 +224,7 @@ export default function Ro2Screen() {
             <View style={styles.webviewWrap}>
                 <WebView
                     ref={webViewRef}
-                    source={{ uri: RO2_URL }}
+                    source={{ uri: ro2Url }}
                     style={styles.webview}
                     originWhitelist={['*']}
                     setSupportMultipleWindows={false}

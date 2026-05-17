@@ -13,8 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, ChevronLeft, PackageOpen } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
+import { loadRophimApiUrl, ROPHIM_API_DEFAULT_URL } from '@/lib/appConfig';
 
-const ROPHIM_API = 'https://rophimm.info/baseapi/api/v1';
 const WINDOW_SIZE = 15;
 const DAY_NAMES = ['CN', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
 
@@ -64,13 +64,14 @@ export default function ScheduleScreen() {
   const [selectedDay, setSelectedDay] = useState<Date>(today);
   const [items, setItems] = useState<ShowtimeItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [apiBaseUrl, setApiBaseUrl] = useState(ROPHIM_API_DEFAULT_URL);
   const dateBarRef = useRef<ScrollView>(null);
 
   const fetchSchedule = useCallback(async (date: Date) => {
     setLoading(true);
     setItems([]);
     try {
-      const res = await fetch(`${ROPHIM_API}/showtimes/by-date/${toDateStr(date)}`);
+      const res = await fetch(`${apiBaseUrl}/showtimes/by-date/${toDateStr(date)}`);
       if (!res.ok) throw new Error('API error');
       const data: ShowtimeItem[] = await res.json();
       setItems(data);
@@ -79,6 +80,21 @@ export default function ScheduleScreen() {
     } finally {
       setLoading(false);
     }
+  }, [apiBaseUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const url = await loadRophimApiUrl(ROPHIM_API_DEFAULT_URL);
+      if (!cancelled) {
+        setApiBaseUrl(url);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

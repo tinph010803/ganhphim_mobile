@@ -7,8 +7,8 @@ import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { Image } from 'expo-image';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { ChevronLeft, CircleUserRound, RefreshCw, X } from 'lucide-react-native';
+import { loadOnflixUrl, ONFLIX_DEFAULT_URL } from '@/lib/appConfig';
 
-const ONFLIX_BOOT_URL = 'https://onflix.pro/';
 const ONFLIX_LOGO = 'https://res.cloudinary.com/df2amyjzw/image/upload/v1775905493/logoonflix_bg8k3v.png';
 const ONFLIX_GUIDE_SUPPRESS_KEY = '@onflix_guide_suppress_v1';
 const ONFLIX_GUIDE_STEPS = [
@@ -33,7 +33,7 @@ const ONFLIX_DISCOVERY_SCRIPT = `
 (function() {
     const input = document.querySelector('input#domain, input[type="url"], input[aria-label*="Nhập"], input[placeholder*="onflix"]');
     const inputValue = input ? input.value.trim() : '';
-    const pageLink = (window.location && window.location.origin ? window.location.origin + '/' : window.location.href) || '${ONFLIX_BOOT_URL}';
+    const pageLink = (window.location && window.location.origin ? window.location.origin + '/' : window.location.href) || '${ONFLIX_DEFAULT_URL}';
 
     const result = {
         status: "success",
@@ -97,7 +97,7 @@ export default function OnflixScreen() {
     const webViewRef = useRef<WebView>(null);
     const [canGoBack, setCanGoBack] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [currentUrl, setCurrentUrl] = useState(ONFLIX_BOOT_URL);
+    const [currentUrl, setCurrentUrl] = useState(ONFLIX_DEFAULT_URL);
     const [resolved, setResolved] = useState(false);
     const [showAccountInfo, setShowAccountInfo] = useState(false);
     const [showGuide, setShowGuide] = useState(false);
@@ -141,19 +141,29 @@ export default function OnflixScreen() {
     useEffect(() => {
         lockPortrait().catch(() => {});
 
+        let cancelled = false;
+
+        (async () => {
+            const url = await loadOnflixUrl(ONFLIX_DEFAULT_URL);
+            if (!cancelled) {
+                setCurrentUrl(url);
+            }
+        })();
+
         AsyncStorage.getItem(ONFLIX_GUIDE_SUPPRESS_KEY)
             .then((value) => setSuppressGuide(value === '1'))
             .catch(() => {})
             .finally(() => setGuidePreferenceLoaded(true));
 
         return () => {
+            cancelled = true;
             unlockOrientation().catch(() => {});
         };
     }, []);
 
     useEffect(() => {
         if (!guidePreferenceLoaded || suppressGuide || guideShown || showGuide) return;
-        if (!resolved || currentUrl === ONFLIX_BOOT_URL || loading) return;
+        if (!resolved || currentUrl === ONFLIX_DEFAULT_URL || loading) return;
 
         setGuideShown(true);
         setGuideStep(0);
@@ -198,7 +208,7 @@ export default function OnflixScreen() {
 
         webViewRef.current?.injectJavaScript(ONFLIX_FULLSCREEN_SCRIPT);
 
-        if (!resolved && currentUrl === ONFLIX_BOOT_URL) {
+        if (!resolved && currentUrl === ONFLIX_DEFAULT_URL) {
             webViewRef.current?.injectJavaScript(ONFLIX_DISCOVERY_SCRIPT);
         }
 

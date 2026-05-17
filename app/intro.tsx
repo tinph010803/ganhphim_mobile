@@ -145,7 +145,7 @@ const CINEMA_PROFILES = [
         id: 'onflix',
         name: 'Onflix',
         logo: LOGOS.onflix,
-        active: false,
+        active: true,
     },
     {
         id: 'motchilltv',

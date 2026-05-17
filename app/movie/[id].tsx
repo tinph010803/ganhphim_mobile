@@ -289,7 +289,7 @@ export default function MovieDetailScreen() {
   const movieServers = useMemo(() => {
     const base = (movie?.servers?.length ?? 0) > 0
       ? movie!.servers!
-      : [{ name: 'CAM FULL #1', episodes: movie?.episodes_data ?? [] }];
+      : [{ name: 'Server #1', episodes: movie?.episodes_data ?? [] }];
 
     if (htServers.length === 0) return base;
 
@@ -339,12 +339,12 @@ export default function MovieDetailScreen() {
   }, [movieServers]);
 
   useEffect(() => {
-    if (id && user) {
+    if (id && user && movie) {
       loadGtavnIdAndCheckFavorite();
     } else {
       setIsFavorite(false);
     }
-  }, [id, user]);
+  }, [id, user, movie]);
 
   // Auto-resume: open player directly when navigated from watch history
   useEffect(() => {
@@ -462,11 +462,11 @@ export default function MovieDetailScreen() {
 
   const loadGtavnIdAndCheckFavorite = async () => {
     try {
-      if (!user) return;
-      // Get gtavn movie _id by slug
+      if (!user || !movie) return;
+      // Get gtavn movie _id by normalized slug
       let gtavnId = gtavnMovieIdRef.current;
       if (!gtavnId) {
-        gtavnId = await apiGetGtavnMovieId(id);
+        gtavnId = await apiGetGtavnMovieId(movie.slug || id);
         gtavnMovieIdRef.current = gtavnId;
       }
       if (!gtavnId) return;
@@ -531,9 +531,10 @@ export default function MovieDetailScreen() {
     if (favoriteLoading) return;
     try {
       setFavoriteLoading(true);
+      const movieSlug = movie?.slug || id;
       let gtavnId = gtavnMovieIdRef.current;
       if (!gtavnId) {
-        gtavnId = await apiGetGtavnMovieId(id);
+        gtavnId = await apiGetGtavnMovieId(movieSlug);
         gtavnMovieIdRef.current = gtavnId;
       }
       if (!gtavnId) {

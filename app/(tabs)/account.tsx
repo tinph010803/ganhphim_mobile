@@ -28,6 +28,7 @@ import {
   Shield,
   LogOut,
   Star,
+  Link2,
 } from 'lucide-react-native';
 import { Colors } from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
@@ -353,17 +354,31 @@ export default function AccountScreen() {
 
           {/* Menu dành riêng cho Admin */}
           {user?.role === 'admin' && (
-            <TouchableOpacity
-              style={styles.menuItem}
-              activeOpacity={0.7}
-              onPress={() => router.push('/admin/featured' as any)}
-            >
-              <View style={styles.menuItemLeft}>
-                <Star size={18} color="#f59e0b" />
-                <Text style={[styles.menuItemText, { color: '#f59e0b' }]}>Top Phim</Text>
-              </View>
-              <ChevronRight size={16} color="#f59e0b" />
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={styles.menuItem}
+                activeOpacity={0.7}
+                onPress={() => router.push('/admin/featured' as any)}
+              >
+                <View style={styles.menuItemLeft}>
+                  <Star size={18} color="#f59e0b" />
+                  <Text style={[styles.menuItemText, { color: '#f59e0b' }]}>Top Phim</Text>
+                </View>
+                <ChevronRight size={16} color="#f59e0b" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                activeOpacity={0.7}
+                onPress={() => router.push('/admin/link-profile' as any)}
+              >
+                <View style={styles.menuItemLeft}>
+                  <Link2 size={18} color="#60a5fa" />
+                  <Text style={[styles.menuItemText, { color: '#60a5fa' }]}>Link Profile</Text>
+                </View>
+                <ChevronRight size={16} color="#60a5fa" />
+              </TouchableOpacity>
+            </>
           )}
         </View>
 
